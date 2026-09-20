@@ -1,0 +1,92 @@
+# ==============================================================================
+# PyTorch 科研项目统一配置示例
+# 所有可调整实验参数集中在此文件中。
+# 默认入口：python scripts/train.py --config configs/config.yaml
+# ==============================================================================
+
+experiment:
+  name: "resnet_baseline"
+  output_root: "outputs/runs"
+
+reproducibility:
+  seed: 42
+  deterministic: true
+
+device:
+  # auto | cpu | cuda
+  type: "auto"
+
+paths:
+  # 默认相对于项目根目录解析
+  dataset_root: "data/dataset"
+
+split:
+  # standard: train / val / test
+  # merged_eval: train / eval，允许 val/test 合并
+  mode: "standard"
+  train_ratio: 0.70
+  val_ratio: 0.15
+  test_ratio: 0.15
+  save_manifest: true
+
+model:
+  name: "vit_tiny"
+  in_channels: 1
+  num_classes: 10
+  image_size: 224
+  patch_size: 16
+  embed_dim: 192
+  num_heads: 3
+  num_layers: 12
+  mlp_ratio: 4.0
+  drop_rate: 0.0
+  attn_drop_rate: 0.0
+  drop_path_rate: 0.1
+
+training:
+  epochs: 100
+  batch_size: 64
+  amp: true
+  grad_clip: 5.0
+
+  optimizer:
+    type: "adamw"
+    lr: 0.001
+    weight_decay: 0.0001
+
+  scheduler:
+    type: "cosine"
+    eta_min: 0.000001
+
+  dataloader:
+    num_workers: 4
+    pin_memory: true
+    persistent_workers: true
+    prefetch_factor: 2
+    drop_last: true
+
+cache:
+  enabled: false
+  directory: "outputs/cache"
+
+checkpoint:
+  # 不需要完整恢复训练时可以关闭
+  enabled: true
+  save_best: true
+  save_last: true
+  save_periodic: false
+  interval: 10
+  resume: null
+
+logging:
+  console: true
+  save_file: true
+  save_metrics: true
+  save_figures: true
+
+  # 除非用户明确要求，否则默认关闭
+  tensorboard: false
+
+evaluation:
+  save_confusion_matrix: true
+  save_prediction_file: true
