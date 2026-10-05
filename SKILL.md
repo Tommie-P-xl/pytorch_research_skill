@@ -1,868 +1,156 @@
 ---
 name: pytorch-research-code-style
-description: 统一规范代码 Agent 编写、修改和维护 PyTorch 深度学习科研项目。强调可复现、YAML 单一配置源、核心模型手写、中文注释与 Tensor Shape、可移植路径、实验日志、Run Directory、数据效率、数据泄漏防护和修改影响检查。用户当前提示词始终可以覆盖本 Skill。
+description: Use when 用户新建、重构或维护 PyTorch 科研项目，需要批量训练测试实验，或需要学习他人的 PyTorch 源码并添加中文解释、算法注释与 Tensor Shape 说明。
 ---
 
-# PyTorch 科研代码统一工程规范
+# PyTorch 科研项目与代码学习
 
-## 1. 适用范围与优先级
+两个入口：**构建项目**与**学习并注释已有代码**。主文件提供整体架构、共同风格和阶段路由；详细要求在进入相应阶段时加载。
 
-本 Skill 用于规范代码 Agent 在 PyTorch 深度学习科研项目中的：
+用户当前要求及本次已经确认的选择优先于默认规范。保留用户指定的算法、实验协议、目录和输出格式；修改已有项目时沿用适合的现有结构。
 
-- 新建项目；
-- 新增模型、数据集、训练器、评估器；
-- 修改既有代码；
-- 复现实验；
-- 重构项目目录；
-- 添加开集识别、分类、特征提取、消融实验等科研功能。
+## 1. 识别任务入口
 
-### 最高优先级规则
+- **构建项目**：新建项目、新增功能、重构或复现实验，按第 2～5 节执行。
+- **学习与注释**：理解他人的代码、补学习注释或解释 Shape，直接进入 [代码学习与注释模块](modules/code-annotation.md)。只确认目标文件、阅读深度和注释方式；不套用新建项目的目录、CLI、YAML 或手写模型要求。
+- **混合任务**：先构建并做必要验证，再用同一个注释模块处理最终代码。用户明确要求边写边注释时，提前加载注释模块并在最后复核。
+- **批量实验**：用户要求多组参数重复训练/测试、自动接入模型或特征路径时，视为已选择 [批量实验与流程编排](modules/batch-experiments.md)。已有项目先检查阶段入口与产物契约，再只改必要接口；不要求重建整个项目或启用所有模块。
 
-1. **用户当前提示词优先于本 Skill。**
-2. 本 Skill 是默认工程规范，不是不可覆盖的硬约束。
-3. 若用户明确要求与本 Skill 不同的实现方式，应听从用户，并仅在必要时简要说明可能影响。
-4. 不得因为本 Skill 的默认偏好而擅自改变用户要求的算法、模型、实验设计或输出格式。
+“解释代码”可在对话中讲解；“给代码加注释”才编辑指定源文件。不要把解释请求自动变成重构。
 
----
+## 2. 始终适用的项目规范
 
-# 2. 规范强度说明
+以下是项目构建基础规则，不需要先加载所有子模块。
 
-本文使用以下关键词：
+### 架构与风格
 
-- **MUST**：默认必须遵守；除非用户明确要求覆盖。
-- **SHOULD**：强烈推荐；在不适合当前任务时可以省略。
-- **MUST NOT**：默认禁止；除非用户明确要求。
-
----
-
-# 3. 实验可复现性
-
-## 3.1 统一随机种子
-
-项目 **MUST** 提供唯一的全局随机种子，例如：
-
-```yaml
-reproducibility:
-  seed: 42
-  deterministic: true
-```
-
-该随机种子 **MUST** 统一作用于：
-
-- Python `random`；
-- NumPy；
-- PyTorch CPU；
-- PyTorch CUDA；
-- 多 GPU；
-- 数据集划分；
-- DataLoader worker；
-- 模型参数初始化；
-- 随机数据增强；
-- 需要随机采样的评估过程。
-
-不得在不同模块中随意写死不同的 seed。
-
-## 3.2 数据划分可复现
-
-数据集划分 **MUST** 使用固定随机种子。
-
-若项目需要长期对比实验，**SHOULD** 将本次数据划分结果保存到 Run Directory，例如：
-
-- `splits.json`
-- `splits.csv`
-- `split_manifest.json`
-
-这样可以避免代码修改后，即使 seed 相同，也因为文件排序、数据新增等原因导致划分发生变化。
-
-## 3.3 确定性与性能
-
-若 `deterministic: true`：
-
-- SHOULD 启用确定性设置；
-- SHOULD 关闭会引入非确定性的 benchmark 行为；
-- 日志中 SHOULD 提示确定性设置可能降低训练速度。
-
-若用户更关心速度，可通过 YAML 关闭。
-
----
-
-# 4. YAML 是实验参数的 Single Source of Truth
-
-## 4.1 CLI 原则
-
-所有训练、测试、评估、特征提取等入口脚本，默认 **只允许一个业务参数**：
-
-```bash
-python scripts/train.py --config configs/config.yaml
-```
-
-Agent **MUST NOT** 默认增加以下形式的业务参数：
-
-```bash
---epochs
---batch-size
---lr
---resume
---checkpoint
---force-recompute
---num-workers
-```
-
-这些实验参数 **MUST** 放入 YAML。
-
-除非用户明确要求，否则不得让 CLI 和 YAML 同时控制同一个实验参数。
-
-## 4.2 可调参数全部进入 YAML
-
-凡是科研人员可能调整的内容，原则上 **MUST** 配置化，包括：
-
-- 数据路径；
-- 数据划分比例；
-- 随机种子；
-- 模型类型；
-- 模型结构超参数；
-- batch size；
-- epoch；
-- 优化器；
-- 学习率；
-- scheduler；
-- AMP；
-- 梯度裁剪；
-- DataLoader；
-- checkpoint；
-- cache；
-- 评估阈值；
-- 输出目录；
-- 是否保存图像；
-- 是否启用某个实验模块。
-
-Agent **MUST NOT** 将实验参数散落硬编码在 Python 文件中。
-
-## 4.3 配置读取后不得偷偷改写实验语义
-
-Agent **MUST NOT** 静默覆盖用户 YAML 中的参数。
-
-例如类别数可以从数据集自动推导，但应：
-
-- 显式打印推导结果；
-- 对冲突配置进行报错或明确警告；
-- 不要静默修改后继续执行。
-
----
-
-# 5. 核心模型结构必须透明可读
-
-## 5.1 允许直接使用的基础积木
-
-可以直接使用 PyTorch 基础层和张量运算，例如：
-
-- `nn.Conv1d / nn.Conv2d / nn.Conv3d`
-- `nn.Linear`
-- `nn.BatchNorm*`
-- `nn.LayerNorm`
-- `nn.Dropout`
-- `nn.MaxPool* / nn.AvgPool* / nn.AdaptiveAvgPool*`
-- 激活函数
-- `torch.matmul`
-- `torch.softmax`
-- `torch.cat`
-- `reshape / view / permute / transpose / flatten`
-
-这些属于基础积木，不要求重新实现 PyTorch 本身。
-
-## 5.2 默认必须手写的科研核心模块
-
-以下结构 **MUST** 自己实现核心逻辑：
-
-- ResNet BasicBlock；
-- ResNet Bottleneck；
-- ResNet 主体；
-- Patch Embedding；
-- Multi-Head Self-Attention；
-- Transformer Encoder Block；
-- MLP / Feed Forward Block；
-- ViT；
-- Stochastic Depth / DropPath；
-- 项目提出的新型特征融合模块；
-- 论文中的关键创新模块。
-
-## 5.3 默认禁止隐藏核心结构的高级封装
-
-除非用户明确要求，**MUST NOT** 使用：
-
-- `torchvision.models.resnet*`
-- `torchvision.models.vit*`
-- `timm.create_model(...)`
-- 其他库中直接返回完整主干网络的高级 API；
-- `nn.MultiheadAttention`
-- `nn.TransformerEncoder`
-- `nn.TransformerEncoderLayer`
-
-原因：科研代码应让研究人员直接看到关键计算过程，方便理解、修改、插入模块和做消融实验。
-
-## 5.4 第三方库的合理使用
-
-数据预处理、通用数学工具、指标计算等可以合理使用成熟库。
-
-禁止的重点是：**不要把需要研究和修改的核心网络结构隐藏在黑盒高级接口里。**
-
----
-
-# 6. 代码可读性与中文注释规范
-
-## 6.1 语言约定
-
-默认：
-
-- 变量名、函数名、类名：英文；
-- docstring：中文；
-- 解释性注释：中文；
-- 常见数学或深度学习术语可以保留英文，例如 Attention、logits、feature、token、patch。
-
-## 6.2 文件级说明
-
-重要 Python 文件 **SHOULD** 在顶部说明：
-
-- 文件功能；
-- 输入；
-- 输出；
-- 在整体 pipeline 中的位置。
-
-## 6.3 Class / Function docstring
-
-核心类和核心函数 **MUST** 有清晰 docstring，至少说明：
-
-- 功能；
-- 参数；
-- 返回值；
-- 必要时说明输入输出 Tensor Shape；
-- 特殊设计或对应论文思想。
-
-## 6.4 注释写“为什么”，而不只是复述代码
-
-避免：
-
-```python
-# x 加 1
-x = x + 1
-```
-
-更应该解释：
-
-- 为什么这样处理；
-- 对应哪一步算法；
-- 为什么需要 reshape；
-- 为什么此处必须 detach；
-- 为什么验证集不能参与训练。
-
-## 6.5 行长度与排版
-
-代码 **MUST** 优先可读性，避免一行塞入大量参数或复杂表达式。
-
-建议：
-
-- 单行尽量不超过约 100 个字符；
-- 函数参数较多时换行；
-- 字典、函数调用、条件表达式过长时换行；
-- 使用空行分隔逻辑阶段。
-
----
-
-# 7. Tensor Shape 注释规范
-
-在以下位置，只要 Shape 可以确定，**MUST** 或 **SHOULD** 添加张量形状说明：
-
-- `forward()`；
-- reshape / view；
-- permute / transpose；
-- flatten；
-- pooling；
-- token 拼接；
-- 多尺度特征融合；
-- attention Q/K/V；
-- concat；
-- 特征提取接口。
-
-推荐格式：
-
-```python
-x = torch.cat((x0, x1, x2), dim=2)  # (B, N, D) * 3 -> (B, N, 3D)
-```
-
-Shape 注释应表达**语义维度**，优先使用：
-
-- `B`：batch size
-- `C`：channel
-- `H, W`：空间尺寸
-- `N`：token / sequence length
-- `D`：embedding dimension
-- `K`：class count
-
----
-
-# 8. 推荐项目结构
-
-默认推荐：
+- 分离配置、数据、模型、训练、评估和通用工具；入口只组装流程。根据规模合并简单目录，不创建无用途的占位文件。
+- 推荐目录职责如下，用户指定的结构优先：
 
 ```text
 project/
-├── configs/
-│   └── config.yaml
-├── datasets/
-│   ├── __init__.py
-│   └── dataset.py
-├── models/
-│   ├── __init__.py
-│   ├── backbones/
-│   ├── blocks/
-│   └── model_factory.py
-├── trainers/
-│   ├── __init__.py
-│   └── trainer.py
-├── evaluators/
-│   ├── __init__.py
-│   └── metrics.py
-├── utils/
-│   ├── __init__.py
-│   ├── config.py
-│   ├── reproducibility.py
-│   ├── logging.py
-│   ├── run_manager.py
-│   └── checkpoint.py
-├── tools/
-│   ├── verify_dataset.py
-│   └── smoke_test.py
-├── scripts/
-│   ├── train.py
-│   └── test.py
-├── outputs/
+├── configs/       # YAML 实验参数
+├── datasets/      # Dataset、划分、DataLoader
+├── models/        # backbone、block、完整模型
+├── trainers/      # 训练与验证
+├── evaluators/    # 评估与指标
+├── utils/         # 配置、种子等通用功能
+├── scripts/       # 轻量 train/test 入口
+├── tools/         # 按需创建检查入口
+├── outputs/       # 运行产物
 ├── README.md
 └── requirements.txt
 ```
 
-### 入口脚本职责
-
-`scripts/train.py` / `scripts/test.py` **MUST** 保持轻量。
-
-入口脚本主要负责：
-
-1. 读取 config；
-2. 校验 config；
-3. 设置 seed；
-4. 创建 Run Directory；
-5. 构建数据；
-6. 构建模型；
-7. 调用 trainer / evaluator；
-8. 输出最终路径与关键结果。
-
-**MUST NOT** 把大量模型、数据、训练核心逻辑全部堆在入口脚本中。
-
----
-
-# 9. 数据集、DataLoader 与缓存
-
-## 9.1 数据读取原则
-
-Dataset 初始化阶段 **SHOULD**：
-
-- 只扫描一次目录；
-- 建立样本索引；
-- 避免每个 `__getitem__` 重复扫描文件系统；
-- 对文件名排序，保证可复现。
-
-大规模数据默认优先 lazy loading，而不是盲目一次性全部加载进内存。
-
-## 9.2 DataLoader 性能
-
-Agent **SHOULD** 根据任务提供 YAML 配置：
-
-- `num_workers`
-- `pin_memory`
-- `persistent_workers`
-- `prefetch_factor`
-- `drop_last`
-
-GPU 训练时 SHOULD 使用合理的 `non_blocking=True`。
-
-不同平台的 DataLoader 行为可能不同，Windows / Ubuntu 迁移时不得依赖仅某个平台有效的写法。
-
-## 9.3 缓存机制
-
-当以下条件同时满足时，**SHOULD** 设计缓存：
-
-1. 预处理或特征提取计算昂贵；
-2. 输入数据和关键配置没有变化；
-3. 结果可以安全复用。
-
-例如：
-
-- STFT / scattering 预处理；
-- backbone feature；
-- 固定模型下的中间特征；
-- 大型索引文件。
-
-缓存 **MUST** 能识别关键配置变化，避免读取过期缓存。
-
-缓存功能 **MUST** 可通过 YAML 开关控制。
-
----
-
-# 10. 数据泄漏防护与数据划分模式
-
-## 10.1 默认模式：train / val / test
-
-若项目区分三者：
-
-- train：模型参数训练；
-- val：模型选择、阈值标定、超参数选择；
-- test：最终报告。
-
-测试集 **MUST NOT** 反向影响训练、模型选择和超参数调整。
-
-## 10.2 允许 val / test 不区分
-
-用户允许某些项目不区分 val 和 test。
-
-此时可以使用：
-
-- `train / eval`
-- 或 `train / val_test`
-
-但 **MUST**：
-
-1. 在 README 和日志中明确说明该集合同时承担验证与最终评估职责；
-2. 不得将其描述为“完全独立、无偏的最终测试集”；
-3. 不得在代码中虚构一个不存在的独立 test split；
-4. 若后续论文需要严格最终测试，应支持重新切分。
-
-## 10.3 Open Set / OOD 特别规则
-
-必须明确：
-
-- known classes；
-- unknown classes；
-- unknown 是否允许出现在训练阶段；
-- threshold 使用哪个 split 标定；
-- 最终指标使用哪个 split。
-
-任何可能造成未知类泄漏的操作都必须显式处理。
-
----
-
-# 11. 终端反馈、日志、指标与图像
-
-## 11.1 运行过程不得长时间沉默
-
-任何耗时阶段 **MUST** 在终端给出状态，例如：
-
-- 加载配置；
-- 扫描数据集；
-- 构建 DataLoader；
-- 构建模型；
-- 加载 checkpoint；
-- epoch 训练；
-- 特征提取；
-- 阈值标定；
-- 测试；
-- 保存结果。
-
-长循环 SHOULD 使用 `tqdm`。
-
-## 11.2 日志文件
-
-训练默认 SHOULD 保存：
-
-```text
-training.log
-```
-
-测试默认 SHOULD 保存：
-
-```text
-testing.log
-```
-
-若 val/test 合并，可使用：
-
-```text
-evaluation.log
-```
-
-重要终端信息 SHOULD 同时写入日志文件。
-
-## 11.3 指标记录
-
-训练结果 SHOULD 记录结构化指标，例如：
-
-- CSV；
-- JSON；
-- YAML。
-
-不要只依赖终端历史。
-
-## 11.4 图像保存
-
-分类任务通常 SHOULD 包括：
-
-- loss 曲线；
-- accuracy 曲线；
-- confusion matrix。
-
-Open Set / OOD 任务根据实际需要增加：
-
-- ROC；
-- PR；
-- AUROC；
-- AUPR-In；
-- AUPR-Out；
-- FPR@TPR95；
-- OSCR；
-- threshold 相关图。
-
-不得机械生成与任务无关的图。
-
-## 11.5 TensorBoard 默认关闭
-
-除非用户明确要求，Agent 默认 **MUST NOT**：
-
-- 引入 TensorBoard；
-- 创建 `SummaryWriter`；
-- 增加 TensorBoard 依赖；
-- 在项目结构中生成 runs 目录。
-
-若用户要求使用 TensorBoard，再通过 YAML 配置启用。
-
----
-
-# 12. Run Directory 与实验快照
-
-每次正式训练或完整评估 **SHOULD** 创建独立 Run Directory。
-
-推荐：
-
-```text
-outputs/
-└── runs/
-    └── 20260920_160000_resnet50_baseline/
-        ├── config.yaml
-        ├── resolved_config.yaml
-        ├── environment.json
-        ├── splits.json
-        ├── logs/
-        │   ├── training.log
-        │   └── testing.log
-        ├── checkpoints/
-        ├── metrics/
-        │   ├── train_metrics.csv
-        │   └── test_metrics.json
-        └── figures/
-```
-
-### 必须避免
-
-Agent **MUST NOT** 默认把不同实验都覆盖写入：
-
-```text
-outputs/best_model.pth
-outputs/results.json
-```
-
-除非项目本身明确只需要一次性实验。
-
----
-
-# 13. Checkpoint 规范
-
-Checkpoint 功能 **MUST** 由 YAML 开关控制，例如：
+- 英文标识符；类名 `PascalCase`，函数/变量 `snake_case`，常量 `UPPER_SNAKE_CASE`。公共接口加类型提示，batch 与参数命名一致。
+- 复杂调用与表达式分行，单行尽量不超过 100 字符，空行区分阶段。
+- 核心科研模型默认显式手写，允许 PyTorch 基础层与运算；细则在模型模块。用户指定预训练库或现成 backbone 时遵从用户。
+- 注释语言、范围和密度由用户选择，统一由注释模块维护。
+
+### 配置、路径与设备
+
+- YAML 是实验参数的唯一来源；入口默认只接受一个业务参数 `--config`，`--help` 和分布式启动器内部 rank 信息不属于业务参数，用户无需填写。epochs、lr、batch size、checkpoint 等进入 YAML；用户要求额外业务 CLI 时再增加。
+- 默认命令使用通用 `python`，不写死解释器或 Conda 路径。
+- 使用 `pathlib.Path`；相对配置、数据、缓存及输出路径统一按**项目根目录**解析，在 README 写清楚，不依赖调用者当前工作目录。
+- 不在源代码、示例配置和持久化样本清单中写机器专属绝对路径。用户通过本地配置提供外部绝对路径时可以接受，不固化成共享默认值。
+- 设备默认 `auto`、优先 CUDA：多个可见且 CUDA 可用的 GPU 自动多卡；一个则单卡；没有可用 CUDA 才用 CPU。不要求用户填写 GPU 数量、rank 或手动运行 torchrun。
+- 自动多卡须真正执行并行计算，不只是选择 `cuda:0`：后端支持时优先 DDP（一卡一进程），否则使用兼容的 DataParallel。启动、数据分片、指标汇总和产物保存需统一处理；入口仍只接受 `--config`。细节见模型模块，但这项能力即使跳过该模块也必须实现。
+- 默认尊重 `CUDA_VISIBLE_DEVICES`；`training.batch_size` 定义为全局 batch，不因 GPU 数增加而静默乘倍。不整除时使用可保持语义的并行方案；batch 小于卡数时只启用可分配到样本的卡并说明原因，不悄悄改 batch。
+- 用户可显式选择 CPU/单卡/多卡策略；显式 CUDA 不可用时报错，只有默认自动模式回退 CPU。OOM 或训练错误不伪装成“无 CUDA”后重跑 CPU；自动选择不保证所有任务都获得最大加速。
+- 不静默修改配置、忽略不存在的 checkpoint、未知类或关键依赖。耗时工作前检查配置、路径、设备和接口。
+
+### 可复现与实验边界
+
+- 唯一全局 seed 同步到 Python、NumPy、PyTorch CPU/CUDA、划分、初始化、增强及 DataLoader worker/generator；不在各文件写不同 seed。
+- 输入文件排序。保留统一 seed 和可选的 cuDNN deterministic/benchmark 配置，**不调用严格确定性算法开关**，避免不支持确定性实现的算子阻断运行。这里的 deterministic 只控制 cuDNN 设置，不承诺全部算子或跨设备、跨版本逐位一致。
+- 明确 train/val/test 职责，测试结果不参与模型、超参数或阈值选择。用户合并 val/test 时说明它不是独立最终测试。
+- Open Set/OOD 明确 known/unknown、训练样本和阈值标定集合，不自行改变研究协议。
+- 耗时步骤至少显示阶段和进度；高级日志、图表与归档由展示模块决定。TensorBoard 默认不新增，用户要求才加入。
+- 修改后检查配置、依赖、入口和 README 是否需同步；进行与改动相称的验证，不把未运行检查说成已通过。
+
+## 3. 六个可选子模块
+
+**先用本表选择，不预先读取模块正文。** 子模块是本 Skill 内按需读取的 Markdown 指令文件，无需单独安装或 Python 加载器。
+
+| 模块 | 本地 Markdown | 何时读取 | 用户选项 |
+|---|---|---|---|
+| 数据流程与效率 | [data-pipeline.md](modules/data-pipeline.md) | 实现 Dataset、划分及 DataLoader 前 | 是否加入；缓存是否需要 |
+| 模型与训练细则 | [model-training.md](modules/model-training.md) | 实现模型、loss、训练/评估前 | 是否加入；模型与训练策略 |
+| 实验记录与数据展示 | [experiment-reporting.md](modules/experiment-reporting.md) | 接入指标记录前，以及生成图表前 | 是否加入；日志、指标、图表格式 |
+| 检查点、验证与交付 | [validation-delivery.md](modules/validation-delivery.md) | 实现 checkpoint 前及交付验证前 | 是否加入；checkpoint、resume、smoke test |
+| 批量实验与流程编排 | [batch-experiments.md](modules/batch-experiments.md) | 确定批量流程与各阶段产物接口前 | 是否加入；参数组、阶段链、失败策略 |
+| 代码学习与注释 | [code-annotation.md](modules/code-annotation.md) | 构建后注释阶段，或独立源码学习 | 是否加入；简洁/标准/教学；范围及语言 |
+
+“跳过模块”表示不附加其细则；仍要实现用户要求的基本数据读取、训练和评估，遵守主入口。跳过展示不代表运行可沉默，跳过验证不代表可交付明显无法运行的代码。
+
+## 4. 用户选择与阶段加载协议
+
+1. **先读主文件**和项目必要上下文，识别用户已经给出的选择。
+2. **一次集中询问尚未明确的模块开关及注释程度**。不要给用户粘贴全部细则，不要求一次补齐所有算法细节。提问示例：
+
+   > 主流程先完成项目架构与核心代码，再接入实验展示，最后加注释。
+   > 六个细则模块中，希望启用哪些：数据流程、模型训练、实验展示、检查点与验证、批量实验、代码注释？
+   > 如需注释，选择简洁、标准还是教学程度？缓存、checkpoint 和图表格式也可指定，剩余细节到对应阶段再确认。
+
+3. **记录选择**，使用当前计划或已有任务笔记，不强制新增文件：
+
+   ```text
+   模式：构建项目 / 学习注释
+   数据流程：启用/跳过/待确认；缓存：开/关/待确认
+   模型训练：启用/跳过/待确认
+   实验展示：启用/跳过/待确认；指标与图表格式：用户选择
+   检查点与验证：启用/跳过/待确认；checkpoint：开/关；resume：路径/无/待确认
+   Smoke test：开/关/待确认
+   批量实验：启用/跳过/待确认；参数组与阶段链：用户选择；失败策略：停止/继续其他实验
+   代码注释：启用/跳过/待确认；程度：简洁/标准/教学；范围：用户选择
+   当前阶段：架构 / 核心实现 / 展示 / 注释 / 交付
+   ```
+
+4. **未回答选项保留待确认**，先推进不依赖它的架构与基本代码。沉默不是全部启用或默认注释程度；进入依赖阶段前再确认。用户要求“你来决定/采用推荐方案”时，说明选择后继续。
+5. **已有答案不重复问**。“只加标准注释，不要图表”已确定注释档位与展示开关。只解释代码时先按问题讲解，不问项目构建模块。
+6. **进入阶段时实际打开对应文件**，简短说明“进入 X 阶段，读取 Y 模块”；未读取正文不声称已经应用。
+7. 每次只读取当前阶段需要的已选模块；不提前通读全部附件。模块可在多个阶段生效：展示规则首次在核心实现的指标记录接口处加载，最终图表在展示阶段交付；验证规则可在 checkpoint 实现前加载；批量模块在确定阶段入口与产物接口时加载，不等训练结束才设计自动测试。阶段结束记录结果与下一阶段。
+8. 同一模块多阶段使用时保留已读规则；上下文压缩或文件更新后恢复选择记录，按需重读当前模块。文件缺失时说明缺失内容，不假装已加载。
+
+## 5. 构建项目的阶段顺序
+
+1. **整体架构**：按主文件确定目录、配置、路径基准、种子、自动单/多 GPU 与 CPU、数据/模型接口与实验边界。已选批量实验时在此阶段读取该模块并定义流程/产物契约。等待其他选择时可推进不依赖它们的工作。
+2. **核心实现**：数据阶段才读已选的数据模块；模型/训练阶段才读已选的模型模块。如果选择 checkpoint，在实现保存/恢复接口前加载验证模块。用最小检查及时发现实现问题。
+3. **实验数据展示**：已选展示模块时，先读它再接入训练指标记录，利用真实指标/预测生成图表。无数据时提供生成接口并说明未生成真实实验图。训练记录需前置，最终图表仍在本阶段交付。
+4. **添加注释**：行为稳定后读取已选的注释模块，按确认的程度与范围补说明。
+5. **验证与交付**：按已选验证模块检查；注释变动也核验可执行语义。已选批量模块则交付参数清单、单命令编排入口、自动产物绑定和故障处理，先验证流程再执行用户要求的实验。汇报文件、命令、结果、未执行项及模块选择。
+
+独立学习任务只执行“确定范围 → 读取注释模块 → 追踪源码 → 注释/讲解 → 核验”，不运行整套构建流程。
+
+## 6. 基础 YAML 示例
+
+只示范主入口参数。可选配置在对应模块中，启用时再合并；不必全量复制示例。
 
 ```yaml
-checkpoint:
-  enabled: true
-  save_best: true
-  save_last: true
-  save_periodic: false
-  resume: null
-```
-
-若 `checkpoint.enabled: false`，不得强行创建完整训练状态 checkpoint。
-
-若启用“可恢复训练”的 checkpoint，则 **MUST** 尽量保存完整状态：
-
-- model state；
-- optimizer state；
-- scheduler state；
-- AMP scaler state（若使用）；
-- epoch / step；
-- best metric；
-- config；
-- 必要的随机状态；
-- 关键 metadata。
-
-不得把“只加载模型权重”称为完整 resume。
-
----
-
-# 14. Device 与跨平台路径
-
-## 14.1 Device 不得硬编码
-
-Device SHOULD 通过 YAML 指定：
-
-```yaml
+experiment:
+  name: baseline
+  output_root: outputs/runs
+reproducibility:
+  seed: 42
+  deterministic: true
 device:
   type: auto
+  parallel: auto
+paths:
+  dataset_root: data/dataset
+model:
+  name: custom_model
+training:
+  epochs: 100
+  batch_size: 64
+  optimizer:
+    type: adamw
+    lr: 0.001
 ```
-
-推荐支持：
-
-- `auto`
-- `cpu`
-- `cuda`
-- 必要时显式 GPU index
-
-如果用户明确指定 CUDA，但 CUDA 不可用，**MUST** 报错或明确提示；不得静默切换 CPU。
-
-`auto` 模式才可以自动选择。
-
-## 14.2 路径优先使用 pathlib
-
-代码 SHOULD 使用 `pathlib.Path`。
-
-配置文件中优先使用相对路径，例如：
-
-```yaml
-dataset:
-  root: data/uav_rf
-```
-
-**MUST NOT** 默认硬编码：
-
-```text
-C:\Users\xxx\...
-/home/xxx/...
-```
-
-目标是让项目可以在 Windows 与 Ubuntu 之间迁移。
-
-## 14.3 路径解析规则必须统一
-
-项目必须统一约定相对路径相对于：
-
-- 项目根目录；
-- 或配置文件所在目录。
-
-只能选择一种规则，并在 README 中写清楚。
-
-默认推荐：**相对项目根目录解析。**
-
----
-
-# 15. Fail Fast 与禁止静默降级
-
-程序 SHOULD 在正式训练开始前完成配置和数据合法性检查。
-
-常见检查包括：
-
-- 路径是否存在；
-- 数据集是否为空；
-- 类别目录是否合法；
-- unknown class 是否存在；
-- train / val / test 比例是否合法；
-- `patch_size` 是否能正确处理输入；
-- `embed_dim % num_heads == 0`；
-- batch size 是否大于 0；
-- checkpoint 是否存在；
-- cache 是否与当前配置匹配。
-
-### 禁止静默降级
-
-Agent **MUST NOT** 默认做以下行为：
-
-- CUDA 不可用时偷偷改用 CPU；
-- checkpoint 找不到时偷偷从头训练；
-- unknown class 写错时自动忽略；
-- 配置项非法时偷偷替换为默认值；
-- cache 不兼容时仍继续使用；
-- 依赖缺失时悄悄关闭重要功能。
-
-应明确报错，或在确实安全时给出清晰 warning。
-
----
-
-# 16. 接口、命名与类型提示
-
-为保证项目长期维护：
-
-- 类名 SHOULD 使用 `PascalCase`；
-- 函数和变量 SHOULD 使用 `snake_case`；
-- 常量 SHOULD 使用 `UPPER_SNAKE_CASE`；
-- 公共函数 SHOULD 添加类型提示；
-- 同类模块 SHOULD 保持一致的参数命名；
-- train / eval 的 batch 数据结构 SHOULD 尽量统一。
-
-不要在不同文件中交替使用：
-
-```text
-label / target / y / gt
-```
-
-除非语义确实不同。
-
----
-
-# 17. 轻量级 Smoke Test
-
-项目 SHOULD 提供一个快速检查入口，例如：
-
-```bash
-python tools/smoke_test.py --config configs/config.yaml
-```
-
-Smoke test 不要求完整训练，目标是快速发现：
-
-- 配置错误；
-- Dataset 读取错误；
-- DataLoader 错误；
-- 输入 Shape 错误；
-- 模型 forward 错误；
-- loss 计算错误；
-- 单步 backward 错误；
-- device 不兼容。
-
-建议只运行 1~2 个 batch。
-
----
-
-# 18. 实验环境元信息
-
-为了复现，Run Directory SHOULD 保存：
-
-```text
-environment.json
-```
-
-建议包含：
-
-- Python 版本；
-- PyTorch 版本；
-- CUDA 版本；
-- cuDNN 版本（可获取时）；
-- GPU 名称；
-- 操作系统；
-- 随机种子；
-- Git commit hash（若项目位于 Git 仓库）；
-- 时间戳。
-
-环境记录失败不应影响训练本身，但 SHOULD 产生 warning。
-
----
-
-# 19. 修改代码后的影响范围检查
-
-Agent 在完成明显功能修改后 **MUST** 检查以下内容是否需要同步：
-
-```text
-实现代码
-  ↓
-config.yaml
-  ↓
-README.md
-  ↓
-requirements.txt
-  ↓
-train / test / evaluator
-  ↓
-tools / smoke test
-  ↓
-输出文件说明
-```
-
-例如新增一个模型参数后，需要检查：
-
-- YAML 是否加入该参数；
-- 默认值是否合理；
-- config validator 是否支持；
-- README 是否说明；
-- checkpoint 是否受影响；
-- 测试脚本是否受影响。
-
-Agent 完成修改时 SHOULD 简要说明同步修改了哪些文件。
-
----
-
-# 20. Agent 执行工作流
-
-当用户要求新建或修改 PyTorch 科研项目时，Agent 默认按以下顺序工作：
-
-1. 阅读当前项目结构与 README；
-2. 找到 config、数据、模型、训练、评估入口；
-3. 判断用户要求会影响哪些模块；
-4. 优先修改 YAML schema / config；
-5. 编写或修改核心模块；
-6. 保持模型结构透明；
-7. 补充中文 docstring 与 Shape 注释；
-8. 检查路径、device、seed；
-9. 检查数据泄漏；
-10. 检查日志、metrics、figures；
-11. 检查 checkpoint 与 cache 开关；
-12. 运行或提供 smoke test；
-13. 检查 README / requirements / config 是否需要同步；
-14. 最后给出变更摘要和运行命令。
-
-默认运行命令应尽量保持为：
 
 ```bash
 python scripts/train.py --config configs/config.yaml
 python scripts/test.py --config configs/config.yaml
 ```
 
----
-
-# 21. 最终交付检查表
-
-Agent 完成代码任务前，应自检：
-
-- [ ] 是否只有 `--config` 作为默认业务 CLI 参数？
-- [ ] 可调实验参数是否已经进入 YAML？
-- [ ] 是否设置统一随机种子？
-- [ ] 数据划分是否可复现？
-- [ ] 是否避免数据泄漏？
-- [ ] 核心模型是否没有使用被禁止的黑盒高级实现？
-- [ ] 核心类与函数是否有中文 docstring？
-- [ ] forward 等关键位置是否有 Tensor Shape 注释？
-- [ ] 是否避免超长代码行？
-- [ ] 数据加载是否避免重复扫描和明显低效操作？
-- [ ] 是否需要缓存？缓存是否可关闭？
-- [ ] 终端是否能看到关键运行状态？
-- [ ] 是否保存必要日志、指标与图像？
-- [ ] TensorBoard 是否仅在用户明确要求时加入？
-- [ ] 正式实验是否使用独立 Run Directory？
-- [ ] checkpoint 是否可通过 YAML 开关控制？
-- [ ] device 是否没有硬编码？
-- [ ] 路径是否跨 Windows / Ubuntu 可迁移？
-- [ ] 是否 Fail Fast？
-- [ ] 是否避免静默降级？
-- [ ] 是否提供必要的 smoke test？
-- [ ] 是否记录环境元信息？
-- [ ] 修改后是否同步检查 config / README / requirements 等文件？
-- [ ] 用户当前提示词是否得到最高优先级？
-
----
-
-# 22. 参考附件
-
-本 Skill 的 `references/` 目录包含参考实现，用于约束 Agent 的代码风格，而不是要求每个项目机械复制：
-
-- `config.example.yaml`：统一 YAML 组织方式；
-- `reproducibility.py`：统一随机种子；
-- `config_utils.py`：配置读取与 Fail Fast；
-- `run_manager.py`：Run Directory 和实验环境记录；
-- `logging_utils.py`：终端 + 文件日志；
-- `checkpoint.py`：可关闭的完整 checkpoint；
-- `model_style_example.py`：手写模型、中文注释和 Shape 风格示例；
-- `dataset_style_example.py`：高效 Dataset / DataLoader 风格；
-- `smoke_test_example.py`：快速前向与反向检查；
-- `project_structure.md`：推荐目录职责；
-- `impact_checklist.md`：代码修改后的同步检查表。
-
-参考附件只用于提供统一风格。若用户指定不同结构或实现，以用户要求为准。
+Skill 本身只包含 Markdown。代码直接在模块代码块中，是编写目标 PyTorch 项目的参考，不是 Skill 的可执行附件。
