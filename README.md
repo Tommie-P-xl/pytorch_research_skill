@@ -18,6 +18,12 @@
 
 ### 1. 获取仓库
 
+**ZIP 安装（推荐）**：从 [最新 Release](https://github.com/Tommie-P-xl/pytorch_research_skill/releases/latest) 下载 [pytorch-research-code-style.zip](https://github.com/Tommie-P-xl/pytorch_research_skill/releases/latest/download/pytorch-research-code-style.zip)。支持 ZIP 导入的环境可直接上传；采用目录安装的环境先解压，再将 `pytorch-research-code-style/` 放入技能目录。
+
+ZIP 按 [Agent Skills 目录规范](https://agentskills.io/specification) 打包，根目录名与 `SKILL.md` 中的 `name` 一致，包含主文件与全部模块。请下载 Release 中的 Skill ZIP，而不是 GitHub 自动生成的源码压缩包。
+
+也可以克隆仓库：
+
 ```bash
 git clone https://github.com/Tommie-P-xl/pytorch_research_skill.git
 ```
@@ -150,6 +156,8 @@ python scripts/run_experiments.py --config configs/experiments.yaml
 
 ```text
 pytorch_research_skill/
+├── .github/workflows/release-skill.yml
+├── .gitignore
 ├── SKILL.md
 ├── README.md
 └── modules/
@@ -162,3 +170,34 @@ pytorch_research_skill/
 ```
 
 本仓库提供 Skill 指令与参考代码。上文的训练、测试和批量入口属于 Agent 按 Skill 构建的目标 PyTorch 项目，不是本仓库附带的可执行程序。
+
+## 自动构建与发布
+
+[GitHub Actions](https://github.com/Tommie-P-xl/pytorch_research_skill/actions/workflows/release-skill.yml) 自动校验 Skill 元数据与本地文档链接，再构建 ZIP 和 `SHA256SUMS.txt`。发布包只包含 `SKILL.md` 与 `modules/`，构建代码直接保存在 workflow 中。
+
+| 触发方式 | 结果 |
+|---|---|
+| 推送到 `main` 或提交 Pull Request | 校验并上传 `skill-package` 构建产物 |
+| Actions 页面手动运行 | 构建当前选择的分支；选择版本标签时也会发布 |
+| 推送 `v1.0.0` 等版本标签 | 构建后自动创建 GitHub Release，上传 ZIP 与校验文件 |
+
+维护者发布新版本：
+
+```bash
+git tag v1.1.0
+git push origin v1.1.0
+```
+
+发布前应将待发布改动提交并推送。带 `-rc.1` 等后缀的标签发布为预发布版本；同一标签的 workflow 重跑可重新上传该版本产物。
+
+安装包结构：
+
+```text
+pytorch-research-code-style.zip
+└── pytorch-research-code-style/
+    ├── SKILL.md
+    └── modules/
+        └── *.md
+```
+
+下载 ZIP 和同一 Release 的 `SHA256SUMS.txt` 后，可使用 SHA-256 工具核对文件；Linux/macOS 可运行 `sha256sum --check SHA256SUMS.txt`（需已安装该工具）。
