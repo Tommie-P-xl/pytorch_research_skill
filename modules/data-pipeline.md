@@ -1,38 +1,49 @@
 ---
 name: pytorch-data-pipeline
-description: Use when 已选择 PyTorch 科研项目的数据流程细则，并进入 Dataset、数据划分、DataLoader 或可选缓存的实现阶段。
+description: 已选择数据流程模块，准备实现 PyTorch 的样本读取、训练验证测试划分、DataLoader 或可选数据缓存时读取。
 ---
 
 # 数据流程与效率
 
-仅在主入口记录启用本模块、或用户直接要求数据流程规范时读取。跳过本模块仍需遵守主入口的种子与数据泄漏边界。
+在用户选择本模块、或直接要求处理数据流程时读取。即使跳过本模块，也要统一随机种子，避免把测试信息用于训练和调参。
 
 ## 输入与阶段输出
 
-输入：数据格式、标签含义、划分协议、全局 seed、数据规模和缓存选择。
-输出：可复现样本索引、明确 split、可取 batch 的 Dataset/DataLoader；缓存只在用户选择时实现。
+开始前要知道：数据文件怎么存、标签代表什么、怎么划分数据、使用哪个 seed、数据有多大、是否缓存。
+完成后应得到：样本列表、每个样本属于哪部分数据的记录，以及能返回一批数据的 Dataset/DataLoader。只有用户选择缓存才实现它。
 
 ## 数据与划分
 
-- 初始化只扫描一次并排序；`__getitem__` 按索引 lazy loading，避免逐样本重新遍历目录。
-- 样本清单保存可移植相对路径。训练增强只应用于训练；验证/测试不随机改变评估协议。
-- 长期对比保存 split manifest 与类别映射，防止同 seed 因输入新增或排序变化改变划分。
-- 随机划分使用统一 seed；时间序列、相邻帧或同一对象需按任务分组/时间隔离。先确认协议，不擅自将时间划分改成随机。
-- 检查精确样本重叠，也区分同场景/同对象的相关性；标准化、特征统计等仅在许可训练集合拟合。
-- `standard` 使用 train/val/test；`merged_eval` 使用 train/eval，并明确其承担共同评估职责。
-- Open Set/OOD 分别声明 known/unknown 集合、训练许可与阈值来源；不假定每个任务都允许 unknown 参与训练。
+- Dataset 初始化时扫描并排序文件，只做一次。`__getitem__` 根据索引读取当前样本（按需读取，lazy loading），不要每取一个样本就重新扫描目录。
+- 样本清单保存相对路径，方便换机器使用。随机裁剪等训练增强只用于训练；验证和测试按固定的评估方式处理。
+- 长期比较实验时保存划分清单（split manifest）和类别编号。只固定 seed 不够：增加文件后，即使用同一 seed，也可能分出不同的训练集。
+- 随机划分用统一 seed。同一患者、同一对象、相邻视频帧等相关样本，按任务要求分组或按时间隔离，不能只检查文件名不同。用户要求时间划分时，不改成随机划分。
+- 检查训练、验证、测试有没有共用样本。均值、标准差等数据统计只在实验允许的训练数据上计算，再用于其他集合。
+- `standard` 表示 train/val/test 三部分；`merged_eval` 表示 train/eval 两部分。后者的 eval 同时承担验证和测试用途，要说明它不是独立最终测试。
+- Open Set/OOD 要说明已知与未知类别、哪些数据允许训练、在哪部分数据上选阈值；不能默认未知类别也参与训练。
+
+例如，标准化时先用训练数据计算统计量，而不是把三部分数据合在一起算：
+
+```python
+# 假设 train_x、val_x、test_x 是 (样本数, 特征数) 的 NumPy 浮点数组。
+mean = train_x.mean(axis=0)
+std = train_x.std(axis=0).clip(min=1e-6)  # 防止常量特征导致除零。
+train_x = (train_x - mean) / std
+val_x = (val_x - mean) / std
+test_x = (test_x - mean) / std
+```
 
 ## DataLoader 与缓存
 
-- worker/generator 使用全局 seed 派生随机状态；Windows 多进程入口使用主入口保护，worker 回调放在模块顶层。
-- `num_workers=0` 时不传 `prefetch_factor` 或开启 `persistent_workers`。验证/测试默认不 shuffle、不 drop_last。
-- 根据设备配置 pin_memory 与 non_blocking，不盲目一次性载入全部大数据。
-- DDP 训练使用 DistributedSampler 等显式分片；每 epoch 调用 sampler.set_epoch，不能让每张卡重复训练全部数据。验证/测试确保无补齐重复样本进入最终指标，按 sample_id 去重或采用无重复分片后正确汇总。
-- 全局 batch 按并行策略分配，sampler 与 shuffle 不同时启用；下方单进程参考不能未经适配直接用于 DDP。
-- 缓存是模块内独立开关；只有用户选择且计算昂贵、结果可安全复用时才实现。
-- cache key 包含数据版本/指纹、预处理参数，以及特征缓存使用的模型权重和层；不复用不兼容缓存。
-- 缓存写入输出目录，不修改原始数据；随机增强后的结果不能当作固定预处理缓存复用。
-- 非法比例、空数据、缺失类别或无效缓存明确报错，不静默换 split 或忽略 unknown。
+- worker 是负责读数据的子进程，generator 用于控制随机采样；都从全局 seed 设置随机状态。Windows 下启动多进程的代码放在 `if __name__ == "__main__":` 中，worker 回调函数定义在模块顶层。
+- `num_workers=0` 表示在主进程读数据，此时不传 `prefetch_factor`，也不开 `persistent_workers`。验证/测试不打乱顺序（shuffle），不丢弃最后不足一批的样本（drop_last）。
+- 根据设备选择 `pin_memory` 与 `non_blocking`，不要为了加速把放不下的大数据一次性读进内存。
+- DDP 用 `DistributedSampler` 等方式给不同 GPU 分配数据，每轮调用 `sampler.set_epoch(epoch)` 更新随机顺序，不能让每张卡都重复训练全量数据。评估时，采样器可能为均分补齐重复样本，要按 sample_id 去重，或使用不重复的分配方式，再合并指标。
+- 每张卡的 batch 大小遵守主入口的总 batch 规则。设置 sampler 后不要同时设置 `shuffle=True`；下面的单进程示例不能直接用于 DDP。
+- 缓存单独开关控制；只有用户选择，而且重复计算昂贵、结果能复用时才实现。
+- 缓存标识（cache key）记录数据版本或内容摘要、预处理参数；缓存模型特征时还要记录权重和取特征的层。任一项改变，就不能继续用旧缓存。
+- 缓存写入输出目录，不改原始数据。随机增强每次可能不同，不能把增强后的某一次结果固定缓存，冒充普通预处理。
+- 比例不合法、数据为空、缺少类别、缓存不匹配时明确报错，不偷偷换划分或忽略未知类别。
 
 ## 配置片段
 
@@ -104,12 +115,9 @@ def build_generator(seed: int) -> torch.Generator:
 """
 Dataset / DataLoader 风格参考示例。
 
-重点：
-- 初始化时只扫描一次目录；
-- 文件排序保证可复现；
-- 默认 lazy loading；
-- DataLoader worker 使用统一 seed；
-- 大型 npy 数据可选择 mmap 读取。
+重点：初始化时只扫描一次并排序；取样时才读取文件；
+读数据的子进程使用统一 seed。大型 NPY 可用 mmap 按需访问文件，
+但转换成 Tensor 时仍会复制当前样本，不代表整个流程不占内存。
 """
 
 from __future__ import annotations
@@ -196,7 +204,7 @@ def build_dataloader(
     prefetch_factor: int,
     drop_last: bool,
 ) -> DataLoader:
-    """构建具备可复现 worker 随机性的 DataLoader。"""
+    """构建 DataLoader，并统一采样和读数据子进程的随机种子。"""
     kwargs = {
         "dataset": dataset,
         "batch_size": batch_size,
@@ -218,5 +226,5 @@ def build_dataloader(
 
 ## 阶段检查与下一步
 
-检查一次索引扫描、split 无越界重叠、实际 batch 的 dtype/shape/标签、worker=0 分支、缓存开关及失效条件。
-记录划分协议和数据接口，再按主入口进入模型/训练阶段；不提前加载展示或注释模块。
+取一批数据，检查数据类型（dtype）、形状（shape）和标签是否符合模型要求；确认各集合没有不允许的样本重叠。再检查只扫描一次、worker=0 能用、缓存开关及更新条件正确。
+记录数据如何划分、一个 batch 返回什么，再进入模型/训练阶段；不提前读取展示或注释模块。
