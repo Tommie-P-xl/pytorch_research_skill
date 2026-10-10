@@ -1,6 +1,6 @@
 # PyTorch Research Skill
 
-当前版本：**1.2.0** · [Release 与下载](https://github.com/Tommie-P-xl/pytorch_research_skill/releases/tag/v1.2.0)
+当前版本：**1.3.0** · [Release 与下载](https://github.com/Tommie-P-xl/pytorch_research_skill/releases/tag/v1.3.0)
 
 这是一套给 AI 编程助手使用的 PyTorch 科研说明。它让助手按统一规则编写项目、批量运行实验，或帮你读懂已有代码。
 
@@ -192,6 +192,22 @@ python scripts/run_experiments.py --config configs/experiments.yaml
 
 默认使用中文解释，保留英文标识符与常见技术术语。
 
+注释档位和编辑方式分别控制解释密度与实施方法：简洁档默认 `patch`（局部补充），标准和教学档默认 `rewrite`（逐文件生成完整注释版本）。标准档仍按标准密度解释；教学档展开算法与数据流。大文件按完整函数或代码段实施，最后检查整个文件。
+
+`apply_patch` 本身不限制注释量。为避免“要求最详细却只补几处”，全项目任务先列实际文件与定义，再按文件完成“读懂 → 生成候选版本 → diff/AST 验证 → 检查源文件未被别人改动 → 写回 → 覆盖复核”，不以最小 diff 或新增注释行数为目标。
+
+例如：
+
+```text
+请给整个项目自有 Python 文件添加最详细的教学注释，编辑模式使用 rewrite。
+先列出纳入和排除的文件，再逐文件处理所有类、方法、函数及关键计算。
+大文件分段完成，候选版本验证后再写回，保留现有未提交改动。
+检查算法、Tensor Shape、数据流和梯度影响，不要只注释入口和 forward。
+最后逐文件报告覆盖情况、diff/AST 检查与未完成事项。
+```
+
+也可指定“教学档，使用 patch”；覆盖要求相同。执行规则见 [注释编辑策略](skills/pytorch-research-code-style/modules/code-annotation.md#31-档位决定讲多细编辑模式决定怎样落实)。
+
 想直观看到三档差别，阅读 [同一段 Attention 的三种注释示例](skills/pytorch-research-code-style/modules/code-annotation.md#4-三种详细程度的同一段代码)。三段的计算完全一样，只改变说明的详细程度。
 
 其他短代码示例：
@@ -254,16 +270,16 @@ PyYAML 仅用于维护时打包；独立更新工具只使用标准库。
 |---|---|
 | 推送到 `main` 或提交 Pull Request | 校验并上传 `skill-package` 构建产物 |
 | Actions 页面手动运行 | 构建当前选择的分支；选择版本标签时也会发布 |
-| 推送 `v1.2.0` 等版本标签 | 构建后自动创建 GitHub Release，上传 Skill ZIP、独立更新工具与校验文件 |
+| 推送 `v1.3.0` 等版本标签 | 构建后自动创建 GitHub Release，上传 Skill ZIP、独立更新工具与校验文件 |
 
 维护者发布新版本：
 
 ```bash
-git tag v1.3.0
-git push origin v1.3.0
+git tag v1.4.0
+git push origin v1.4.0
 ```
 
-上面以未来版本 `1.3.0` 为例：发布前将仓库根目录的 `VERSION` 改为同一版本，提交并推送。版本标签必须与这个字段一致；`1.3.0-rc.1` 等版本可发布为预发布版，但自动更新只下载安装稳定 Release。版本内容改变时使用新版本号和新标签。
+上面以未来版本 `1.4.0` 为例：发布前将仓库根目录的 `VERSION` 改为同一版本，提交并推送。版本标签必须与这个字段一致；`1.4.0-rc.1` 等版本可发布为预发布版，但自动更新只下载安装稳定 Release。版本内容改变时使用新版本号和新标签。
 
 安装包结构：
 

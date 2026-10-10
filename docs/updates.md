@@ -84,11 +84,11 @@ CC Switch 管理的副本仍由管理器更新；自定义路径无法自动识�
 ```bash
 python -m unittest discover -s tests -v
 python tools/build_skill.py
-git tag v1.3.0
-git push origin v1.3.0
+git tag v1.4.0
+git push origin v1.4.0
 ```
 
-`VERSION` 应先填写 `1.3.0`。GitHub Actions 校验标签与版本一致，发布三项资产：
+`VERSION` 应先填写 `1.4.0`。GitHub Actions 校验标签与版本一致，发布三项资产：
 
 - `pytorch-research-code-style.zip`：PyTorch Skill 主文件、六个模块、文件摘要清单。
 - `update_skill.py`：独立维护工具，不在 Skill ZIP 内。
