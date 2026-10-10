@@ -1,9 +1,6 @@
 ---
 name: pytorch-research-code-style
 description: 新建或修改 PyTorch 科研项目，批量运行训练和测试，或学习已有 PyTorch 代码并补充中文注释、算法解释和张量形状说明时使用。
-metadata:
-  version: "1.1.0"
-  source: "https://github.com/Tommie-P-xl/pytorch_research_skill"
 ---
 
 # PyTorch 科研项目与代码学习
@@ -11,18 +8,6 @@ metadata:
 这套 Skill 帮助 Agent 做两类事：**编写 PyTorch 项目**，或**读懂并注释已有代码**。先读本文件确定要做什么，再到相应步骤读取需要的模块，不必一开始读完所有附件。
 
 用户当前要求及本次已经确认的选择优先于默认规范。保留用户指定的算法、实验协议、目录和输出格式；修改已有项目时沿用适合的现有结构。
-
-## 使用前检查更新
-
-每个新对话首次使用本 Skill 时，若可以运行 Python 且用户没有禁止联网或更新，从**本 Skill 的实际目录**运行：
-
-```bash
-python "<本 Skill 目录>/scripts/update_skill.py" --auto
-```
-
-`--auto` 最多每天联网检查一次稳定 Release。直接从 Release ZIP 安装的副本发现新版后会校验、备份并更新；CC Switch 管理的副本交给管理器更新，不绕过它直接改文件。开发仓库不会被覆盖。
-更新成功后重新读取 `SKILL.md` 和当前需要的模块，再继续用户任务。没有更新或使用缓存时无需重复提示；发现新版、更新失败或需要管理器操作时简短说明。检查失败不阻断原任务，不无限重试，也不在训练中途更换规则。
-没有命令执行能力的 Agent 无法靠这段说明自行更新，应使用宿主的更新功能。手动命令、CC Switch 设置和发布步骤见 [版本检查与更新](references/updates.md)。
 
 ## 1. 识别任务入口
 
@@ -178,7 +163,7 @@ python scripts/train.py --config configs/config.yaml
 python scripts/test.py --config configs/config.yaml
 ```
 
-PyTorch 项目示例仍在模块代码块中，不是本 Skill 附带的训练程序。`scripts/update_skill.py` 是独立的版本检查与更新工具，不依赖 PyTorch。
+代码块用于指导目标 PyTorch 项目的实现，不是本 Skill 附带的训练程序。
 
 ### 从配置读取参数，不在代码里另写一份
 

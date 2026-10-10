@@ -10,6 +10,7 @@ import zipfile
 import yaml
 
 root = Path.cwd().resolve()
+skill_root = root / "skills/pytorch-research-code-style"
 if os.environ.get("GITHUB_REF_TYPE") == "tag":
     tag = os.environ["GITHUB_REF_NAME"]
     if not re.fullmatch(r"v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?", tag):
@@ -39,38 +40,31 @@ def read_skill(path):
         raise ValueError(f"Invalid Skill description: {path}")
     return metadata, text
 
-modules = sorted((root / "modules").rglob("*.md"))
-if not modules or (root / "modules").is_symlink():
+modules = sorted((skill_root / "modules").rglob("*.md"))
+if not modules or skill_root.is_symlink() or (skill_root / "modules").is_symlink():
     raise ValueError("The modules directory must contain Markdown files.")
-sources = [root / "SKILL.md", *modules]
+sources = [skill_root / "SKILL.md", *modules]
 metadata, _ = read_skill(sources[0])
 skill_name = metadata["name"]
-version = metadata.get("metadata", {}).get("version")
+version = (root / "VERSION").read_text(encoding="utf-8").strip()
 if not isinstance(version, str) or not re.fullmatch(
     r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?", version
 ):
-    raise ValueError("metadata.version must be a version such as 1.1.0 or 1.1.0-rc.1.")
+    raise ValueError("VERSION must be a version such as 1.2.0 or 1.2.0-rc.1.")
 if os.environ.get("GITHUB_REF_TYPE") == "tag" and os.environ["GITHUB_REF_NAME"] != "v" + version:
-    raise ValueError("Release tag must match SKILL.md metadata.version.")
+    raise ValueError("Release tag must match VERSION.")
 files = {}
 for source in sources:
     _, text = read_skill(source)
-    if not source.resolve().is_relative_to(root):
+    if not source.resolve().is_relative_to(skill_root):
         raise ValueError(f"Source escapes the repository: {source}")
-    relative = source.relative_to(root).as_posix()
+    relative = source.relative_to(skill_root).as_posix()
     files[relative] = text.encode("utf-8")
 
-# Only ship runtime resources; build tools and tests stay in the repository.
-resources = [root / "scripts/update_skill.py", *sorted((root / "references").rglob("*.md"))]
-if not (root / "references/updates.md").is_file():
-    raise ValueError("Missing references/updates.md.")
-for source in resources:
-    if source.is_symlink() or not source.is_file() or not source.resolve().is_relative_to(root):
-        raise ValueError(f"Invalid runtime resource: {source}")
-    text = source.read_text(encoding="utf-8")
-    if source.suffix == ".py":
-        compile(text, str(source), "exec")
-    files[source.relative_to(root).as_posix()] = text.encode("utf-8")
+# Maintenance tools and documentation are never part of the Skill ZIP.
+updater_source = root / "tools/update_skill.py"
+updater_text = updater_source.read_text(encoding="utf-8")
+compile(updater_text, str(updater_source), "exec")
 
 manifest = {
     "schema_version": 1,
@@ -95,11 +89,11 @@ for relative, content in files.items():
         if parsed.scheme or parsed.netloc or not parsed.path:
             continue
         destination = (
-            root / relative
+            skill_root / relative
         ).parent.joinpath(unquote(parsed.path)).resolve()
-        if not destination.is_relative_to(root):
+        if not destination.is_relative_to(skill_root):
             raise ValueError(f"Link escapes the package: {relative}: {target}")
-        linked_file = destination.relative_to(root).as_posix()
+        linked_file = destination.relative_to(skill_root).as_posix()
         if linked_file not in files:
             raise ValueError(f"Missing packaged link target: {relative}: {target}")
 
@@ -123,9 +117,14 @@ with zipfile.ZipFile(archive) as package:
     for member, content in expected.items():
         if package.read(member) != content:
             raise ValueError(f"ZIP content mismatch: {member}")
+updater_asset = output_dir / "update_skill.py"
+updater_asset.write_bytes(updater_text.encode("utf-8"))
 digest = hashlib.sha256(archive.read_bytes()).hexdigest()
 checksum = output_dir / "SHA256SUMS.txt"
-checksum.write_text(f"{digest}  {archive.name}\n", encoding="utf-8")
+updater_digest = hashlib.sha256(updater_asset.read_bytes()).hexdigest()
+checksum.write_text(
+    f"{digest}  {archive.name}\n{updater_digest}  {updater_asset.name}\n", encoding="utf-8"
+)
 print(f"Validated Skill {skill_name} {version}: {len(files)} packaged files.")
 print(f"Built {archive.name}: {archive.stat().st_size} bytes")
 print(f"SHA256: {digest}")

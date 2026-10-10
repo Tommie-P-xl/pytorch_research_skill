@@ -1,6 +1,6 @@
 # PyTorch Research Skill
 
-当前版本：**1.1.0** · [Release 与下载](https://github.com/Tommie-P-xl/pytorch_research_skill/releases/tag/v1.1.0)
+当前版本：**1.2.0** · [Release 与下载](https://github.com/Tommie-P-xl/pytorch_research_skill/releases/tag/v1.2.0)
 
 这是一套给 AI 编程助手使用的 PyTorch 科研说明。它让助手按统一规则编写项目、批量运行实验，或帮你读懂已有代码。
 
@@ -13,9 +13,8 @@
 - **实验记录与展示**：保存配置快照、日志和结构化指标，按需生成实验图表。
 - **批量实验**：预设多组参数，串联训练、特征提取与测试，自动传递模型和 NPZ 等产物路径。
 - **代码学习与注释**：为已有代码补充中文解释、算法说明与 Tensor Shape 注释，支持三种详细程度。
-- **版本检查与更新**：直接安装的副本支持检查稳定 Release、校验、备份和自动更新；CC Switch 管理的副本使用其仓库更新功能。
 
-Python 和 YAML 科研示例放在文档里，助手会根据它们在你的项目中编写代码。仓库另外附带版本更新工具，不依赖 PyTorch；它不是可直接启动训练的 PyTorch 项目。
+Python 和 YAML 科研示例放在文档里，助手会根据它们在你的项目中编写代码。Skill 内容位于 `skills/`；仓库另外提供独立的维护工具，不依赖 PyTorch。
 
 ## 快速开始
 
@@ -26,7 +25,7 @@ Python 和 YAML 科研示例放在文档里，助手会根据它们在你的项�
 | 使用方式 | 推荐安装方法 | 后续更新 |
 |---|---|---|
 | 使用 CC Switch 管理多个 Agent | 从 GitHub 仓库安装 | 在 CC Switch 中检查并更新，同步到已启用的应用 |
-| 直接放入 Agent 的技能目录 | 下载并解压 Release Skill ZIP | 使用附带的更新脚本 |
+| 直接放入 Agent 的技能目录 | 下载并解压 Release Skill ZIP | 使用管理器或仓库级独立更新工具 |
 | 平台只支持上传 ZIP | 上传 Release Skill ZIP | 使用平台的更新或重新导入功能 |
 | 开发和修改这套 Skill | Git 克隆仓库 | 通过 Git 管理源码 |
 
@@ -39,16 +38,16 @@ Python 和 YAML 科研示例放在文档里，助手会根据它们在你的项�
 ```text
 仓库：Tommie-P-xl/pytorch_research_skill
 分支：main
-技能路径：留空（SKILL.md 在仓库根目录）
+技能路径：skills
 ```
 
-从仓库安装才能保留远端来源信息；本地导入或 ZIP 导入不等于已经关联这个 GitHub 仓库。操作细节见 [更新说明](references/updates.md#cc-switch从仓库安装才能跟踪更新)。
+从仓库安装才能保留远端来源信息；本地导入或 ZIP 导入不等于已经关联这个 GitHub 仓库。操作细节见 [更新说明](docs/updates.md#cc-switch-仓库安装)。
 
 #### 直接安装或上传 ZIP
 
 从 [最新 Release](https://github.com/Tommie-P-xl/pytorch_research_skill/releases/latest) 下载 [pytorch-research-code-style.zip](https://github.com/Tommie-P-xl/pytorch_research_skill/releases/latest/download/pytorch-research-code-style.zip)。支持 ZIP 导入的环境可直接上传；采用目录安装的环境先解压，再将 `pytorch-research-code-style/` 放入技能目录。
 
-ZIP 按 [Agent Skills 目录规范](https://agentskills.io/specification) 打包，根目录名与 `SKILL.md` 中的 `name` 一致，包含主文件、全部模块、更新脚本和文件校验清单。请下载 Release 中的 Skill ZIP，而不是 GitHub 自动生成的源码压缩包。
+ZIP 按 [Agent Skills 目录规范](https://agentskills.io/specification) 打包，根目录名与 `SKILL.md` 中的 `name` 一致，包含主文件、全部模块和文件校验清单；更新工具单独下载。请下载 Release 中的 Skill ZIP，而不是 GitHub 自动生成的源码压缩包。
 
 #### 开发这套 Skill
 
@@ -65,7 +64,7 @@ Skill 名称为 `pytorch-research-code-style`。如果运行环境要求目录�
 也可以直接指定入口：
 
 ```text
-请读取 pytorch_research_skill/SKILL.md，
+请读取 pytorch_research_skill/skills/pytorch-research-code-style/SKILL.md，
 按照其中的阶段流程与模块选择规则处理当前 PyTorch 项目。
 ```
 
@@ -79,37 +78,44 @@ Skill 名称为 `pytorch-research-code-style`。如果运行环境要求目录�
 实验展示保存日志、指标和 SVG 曲线，最后添加标准程度的中文注释。
 ```
 
-## 版本检查与自动更新
+## 安装与更新由仓库工具负责
 
-版本号在 `SKILL.md` 的 `metadata.version` 中维护。有执行命令能力的 Agent 按 Skill 说明，在每个新对话首次使用时运行 `--auto`：成功检查结果缓存 24 小时，有新稳定版时自动校验、备份并更新直接安装的副本。检查由 Agent 使用 Skill 时触发，无需常驻后台进程；实际能否执行取决于宿主是否允许命令和联网。
+参照 [superpowers 的分层结构](https://github.com/obra/superpowers)，本仓库将技能内容与安装维护分开：
+
+| 内容 | 位置 | 谁使用 |
+|---|---|---|
+| PyTorch 工作规则、代码示例 | `skills/pytorch-research-code-style/` | Agent 按需读取 |
+| 版本号、安装和更新说明 | `VERSION`、`docs/` | 用户和管理器 |
+| 检查、更新和打包工具 | `tools/` | 用户、管理器或外部任务 |
+
+`SKILL.md` 和六个模块只说明 PyTorch 工作，不含版本号、版本检查步骤或更新工具链接。加载 Skill 不会要求 Agent 发起更新，也不会读入更新日志、备份说明和发布流程。
+
+使用 CC Switch 时，从仓库的 `skills` 目录发现并安装，由它检查更新和同步应用。直接安装的副本可在 Skill 目录外保存独立工具，再从终端运行：
 
 ```bash
-# 路径换成你实际安装的 Skill 中的脚本；需要 Python 3.10+。
-python "<Skill目录>/scripts/update_skill.py" --check   # 只检查，不修改 Skill。
-python "<Skill目录>/scripts/update_skill.py" --update  # 立即检查并更新。
-python "<Skill目录>/scripts/update_skill.py" --auto    # 每天检查一次，有新版自动更新。
+# 在本仓库根目录运行；路径换成已安装的 Skill 目录，需要 Python 3.10+。
+python tools/update_skill.py --skill-dir "<已安装Skill目录>" --check
+python tools/update_skill.py --skill-dir "<已安装Skill目录>" --update
 ```
 
-**CC Switch 管理的副本由管理器更新**，并同步到所选应用。它支持更新检测与一键更新；是否提供无人值守安装由 CC Switch 决定，Skill 文件不能替它开启这个功能。
+独立工具也提供 `--auto`（缓存成功检查结果 24 小时，有新版则更新），可供用户已配置的外部任务调用。Skill 不触发它，本仓库也不会自动创建系统定时任务。
 
-更新脚本不覆盖开发 Git 仓库，也不绕过 CC Switch 修改它管理的副本。直接安装需使用带 `package-manifest.json` 的新 Release Skill ZIP；发现本地包文件被改过时保留修改，停止自动覆盖。
+**从 1.1.0 迁移**：通过 CC Switch 更新，或下载本版独立 `update_skill.py`，在技能目录外运行并显式指定 `--skill-dir`。独立工具支持读取旧包清单，更新时移除旧包附带的更新脚本和说明，并备份旧副本。旧版内置更新器不支持新版纯 Skill 包，不使用它执行这次迁移。若管理器仍记录旧仓库根路径，从新的 `skills` 路径重新安装一次。
 
-**从 1.0.x 升级**：旧版本没有更新脚本和包内清单，需要先通过 CC Switch 更新，或安装一次 1.1.0 及以上的 Release Skill ZIP。完成这次迁移后，直接安装的副本才具备自检与自动更新能力。
-
-详细安装方式、状态说明、备份位置和新版本发布流程见 [版本检查与更新](references/updates.md)。
+详细操作见 [仓库级更新说明](docs/updates.md)。
 
 ## 模块说明
 
-[SKILL.md](SKILL.md) 说明基础规则、不同任务怎么开始、有哪些模块，以及什么时候读取它们。各模块采用“要知道什么 → 具体怎么做 → 示例 → 检查”的写法。
+[SKILL.md](skills/pytorch-research-code-style/SKILL.md) 说明基础规则、不同任务怎么开始、有哪些模块，以及什么时候读取它们。各模块采用“要知道什么 → 具体怎么做 → 示例 → 检查”的写法。
 
 | 模块 | 内容 | 加载时机 |
 |---|---|---|
-| [数据流程与效率](modules/data-pipeline.md) | 数据划分、样本列表、批量读取、子进程种子与可选缓存 | 编写数据读取代码前 |
-| [模型与训练](modules/model-training.md) | 核心网络、训练与评估、自动并行策略 | 核心实现前 |
-| [实验记录与展示](modules/experiment-reporting.md) | 独立实验目录、配置副本、日志、指标与图表 | 编写指标保存代码前及画图时 |
-| [检查点、验证与交付](modules/validation-delivery.md) | 保存模型、继续训练、少量数据检查、修改影响检查 | 编写模型保存/恢复代码前及交付时 |
-| [批量实验与流程编排](modules/batch-experiments.md) | 多组参数、步骤顺序、自动传递文件路径、失败处理和续跑 | 决定实验流程和文件传递方式时 |
-| [代码学习与注释](modules/code-annotation.md) | 源码追踪、中文 docstring、算法解释与 Tensor Shape | 注释阶段或独立学习任务 |
+| [数据流程与效率](skills/pytorch-research-code-style/modules/data-pipeline.md) | 数据划分、样本列表、批量读取、子进程种子与可选缓存 | 编写数据读取代码前 |
+| [模型与训练](skills/pytorch-research-code-style/modules/model-training.md) | 核心网络、训练与评估、自动并行策略 | 核心实现前 |
+| [实验记录与展示](skills/pytorch-research-code-style/modules/experiment-reporting.md) | 独立实验目录、配置副本、日志、指标与图表 | 编写指标保存代码前及画图时 |
+| [检查点、验证与交付](skills/pytorch-research-code-style/modules/validation-delivery.md) | 保存模型、继续训练、少量数据检查、修改影响检查 | 编写模型保存/恢复代码前及交付时 |
+| [批量实验与流程编排](skills/pytorch-research-code-style/modules/batch-experiments.md) | 多组参数、步骤顺序、自动传递文件路径、失败处理和续跑 | 决定实验流程和文件传递方式时 |
+| [代码学习与注释](skills/pytorch-research-code-style/modules/code-annotation.md) | 源码追踪、中文 docstring、算法解释与 Tensor Shape | 注释阶段或独立学习任务 |
 
 模块通过主入口中的相对链接加载，无需单独安装。模块选择时仅使用主文件中的摘要，随后按阶段读取正文。
 
@@ -160,7 +166,7 @@ Agent 为目标项目实现编排入口后，可使用：
 python scripts/run_experiments.py --config configs/experiments.yaml
 ```
 
-参数清单、步骤顺序和自动填写文件路径的示例见 [批量实验模块](modules/batch-experiments.md)。
+参数清单、步骤顺序和自动填写文件路径的示例见 [批量实验模块](skills/pytorch-research-code-style/modules/batch-experiments.md)。
 
 ### 学习与注释已有代码
 
@@ -186,16 +192,16 @@ python scripts/run_experiments.py --config configs/experiments.yaml
 
 默认使用中文解释，保留英文标识符与常见技术术语。
 
-想直观看到三档差别，阅读 [同一段 Attention 的三种注释示例](modules/code-annotation.md#4-三种详细程度的同一段代码)。三段的计算完全一样，只改变说明的详细程度。
+想直观看到三档差别，阅读 [同一段 Attention 的三种注释示例](skills/pytorch-research-code-style/modules/code-annotation.md#4-三种详细程度的同一段代码)。三段的计算完全一样，只改变说明的详细程度。
 
 其他短代码示例：
 
-- [配置与路径](SKILL.md#6-配置与路径示例)：从 YAML 取学习率，相对路径统一从项目根目录算起。
-- [数据流程](modules/data-pipeline.md)：用训练集计算标准化参数，再用于验证和测试。
-- [模型与训练](modules/model-training.md)：一步训练、一轮验证，以及如何按样本数算平均 loss。
-- [实验记录](modules/experiment-reporting.md)：指标和逐样本预测应保存哪些字段。
-- [检查与交付](modules/validation-delivery.md)：只保存模型权重与完整续训有什么不同。
-- [批量实验](modules/batch-experiments.md)：覆盖当前组参数但不修改基础配置，自动填写本组模型路径。
+- [配置与路径](skills/pytorch-research-code-style/SKILL.md#6-配置与路径示例)：从 YAML 取学习率，相对路径统一从项目根目录算起。
+- [数据流程](skills/pytorch-research-code-style/modules/data-pipeline.md)：用训练集计算标准化参数，再用于验证和测试。
+- [模型与训练](skills/pytorch-research-code-style/modules/model-training.md)：一步训练、一轮验证，以及如何按样本数算平均 loss。
+- [实验记录](skills/pytorch-research-code-style/modules/experiment-reporting.md)：指标和逐样本预测应保存哪些字段。
+- [检查与交付](skills/pytorch-research-code-style/modules/validation-delivery.md)：只保存模型权重与完整续训有什么不同。
+- [批量实验](skills/pytorch-research-code-style/modules/batch-experiments.md)：覆盖当前组参数但不修改基础配置，自动填写本组模型路径。
 
 ## 项目基础约定
 
@@ -214,28 +220,25 @@ python scripts/run_experiments.py --config configs/experiments.yaml
 
 ```text
 pytorch_research_skill/
-├── .github/workflows/release-skill.yml
-├── .gitignore
-├── SKILL.md
 ├── README.md
-├── scripts/update_skill.py      # 标准库版本检查与更新工具
-├── references/updates.md        # 更新与发布说明
-├── tools/build_skill.py         # 仓库维护工具，不放进安装包
-├── tests/test_update_skill.py   # 临时目录中的更新测试
-└── modules/
-    ├── data-pipeline.md
-    ├── model-training.md
-    ├── experiment-reporting.md
-    ├── validation-delivery.md
-    ├── batch-experiments.md
-    └── code-annotation.md
+├── VERSION                      # 仓库版本，不进入 Skill 指令
+├── skills/
+│   └── pytorch-research-code-style/
+│       ├── SKILL.md             # PyTorch 主入口
+│       └── modules/             # 六个 PyTorch 模块
+├── docs/updates.md              # 给用户看的安装、更新说明
+├── tools/
+│   ├── update_skill.py          # 独立维护工具
+│   └── build_skill.py           # 构建安装包与独立工具
+├── tests/test_update_skill.py
+└── .github/workflows/release-skill.yml
 ```
 
 本仓库提供 Skill 指令与参考代码。上文的训练、测试和批量入口属于 Agent 按 Skill 构建的目标 PyTorch 项目，不是本仓库附带的可执行程序。
 
 ## 自动构建与发布
 
-[GitHub Actions](https://github.com/Tommie-P-xl/pytorch_research_skill/actions/workflows/release-skill.yml) 先运行更新工具测试，再校验元数据、版本号和本地链接，构建 ZIP 与 `SHA256SUMS.txt`。构建实现位于 `tools/build_skill.py`；发布包包含主文件、模块、更新工具、更新说明和自动生成的文件摘要清单。
+[GitHub Actions](https://github.com/Tommie-P-xl/pytorch_research_skill/actions/workflows/release-skill.yml) 先运行更新工具测试，再校验元数据、版本号和本地链接，构建 ZIP 与 `SHA256SUMS.txt`。构建实现位于 `tools/build_skill.py`；Skill ZIP 只包含主文件、六个模块和文件摘要清单；更新工具作为独立 Release 产物发布。
 
 本地检查和打包：
 
@@ -245,22 +248,22 @@ python -m unittest discover -s tests -v
 python tools/build_skill.py
 ```
 
-PyYAML 仅用于维护时打包；安装后的更新脚本只使用标准库。
+PyYAML 仅用于维护时打包；独立更新工具只使用标准库。
 
 | 触发方式 | 结果 |
 |---|---|
 | 推送到 `main` 或提交 Pull Request | 校验并上传 `skill-package` 构建产物 |
 | Actions 页面手动运行 | 构建当前选择的分支；选择版本标签时也会发布 |
-| 推送 `v1.1.0` 等版本标签 | 构建后自动创建 GitHub Release，上传 ZIP 与校验文件 |
+| 推送 `v1.2.0` 等版本标签 | 构建后自动创建 GitHub Release，上传 Skill ZIP、独立更新工具与校验文件 |
 
 维护者发布新版本：
 
 ```bash
-git tag v1.2.0
-git push origin v1.2.0
+git tag v1.3.0
+git push origin v1.3.0
 ```
 
-上面以未来版本 `1.2.0` 为例：发布前将 `SKILL.md` 的 `metadata.version` 改为同一版本，提交并推送。版本标签必须与这个字段一致；`1.2.0-rc.1` 等版本可发布为预发布版，但自动更新只下载安装稳定 Release。版本内容改变时使用新版本号和新标签。
+上面以未来版本 `1.3.0` 为例：发布前将仓库根目录的 `VERSION` 改为同一版本，提交并推送。版本标签必须与这个字段一致；`1.3.0-rc.1` 等版本可发布为预发布版，但自动更新只下载安装稳定 Release。版本内容改变时使用新版本号和新标签。
 
 安装包结构：
 
@@ -269,9 +272,7 @@ pytorch-research-code-style.zip
 └── pytorch-research-code-style/
     ├── SKILL.md
     ├── modules/*.md
-    ├── scripts/update_skill.py
-    ├── references/updates.md
     └── package-manifest.json
 ```
 
-下载 ZIP 和同一 Release 的 `SHA256SUMS.txt` 后，可使用 SHA-256 工具核对文件；Linux/macOS 可运行 `sha256sum --check SHA256SUMS.txt`（需已安装该工具）。
+同一 Release 另提供独立 `update_skill.py`。下载所需文件和 `SHA256SUMS.txt` 后，可使用 SHA-256 工具核对文件；Linux/macOS 可运行 `sha256sum --check SHA256SUMS.txt`（需已安装该工具）。

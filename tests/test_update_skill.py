@@ -20,21 +20,25 @@ from urllib.error import URLError
 import zipfile
 
 
-MODULE_PATH = Path(__file__).resolve().parents[1] / "scripts/update_skill.py"
+MODULE_PATH = Path(__file__).resolve().parents[1] / "tools/update_skill.py"
 SPEC = importlib.util.spec_from_file_location("update_skill", MODULE_PATH)
 updater = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(updater)
 
 
-def make_payload(version, extras=None):
-    skill = f'---\nname: {updater.SKILL_NAME}\nmetadata:\n  version: "{version}"\n---\n'
+def make_payload(version, extras=None, legacy=False):
+    metadata = f'metadata:\n  version: "{version}"\n' if legacy else ''
+    skill = f'---\nname: {updater.SKILL_NAME}\ndescription: PyTorch fixture\n{metadata}---\n'
     files = {
         "SKILL.md": skill.encode(),
-        "scripts/update_skill.py": b"# updater fixture\n",
-        "references/updates.md": b"# update instructions\n",
         "modules/core.md": ("# module " + version + "\n").encode(),
         **(extras or {}),
     }
+    if legacy:
+        files.update({
+            "scripts/update_skill.py": b"# old bundled updater\n",
+            "references/updates.md": b"# old update instructions\n",
+        })
     manifest = {
         "schema_version": 1, "name": updater.SKILL_NAME, "version": version,
         "files": {name: hashlib.sha256(data).hexdigest() for name, data in files.items()},
@@ -73,7 +77,8 @@ class UpdaterTests(unittest.TestCase):
 
     def test_versions_are_compared_numerically_and_prereleases_rejected(self):
         self.assertGreater(updater.version_tuple("1.10.0"), updater.version_tuple("1.2.0"))
-        self.assertEqual(updater.read_version(self.old["SKILL.md"].decode()), "1.1.0")
+        self.assertEqual(updater.read_installed_version(self.root), "1.1.0")
+        self.assertEqual(updater.read_version(make_payload("1.1.0", legacy=True)["SKILL.md"].decode()), "1.1.0")
         for version in ("1.2.0-rc.1", "v1.2.0", "01.2.0", "../1.2.0"):
             with self.assertRaises(updater.UpdateError):
                 updater.version_tuple(version)
@@ -115,7 +120,7 @@ class UpdaterTests(unittest.TestCase):
     def test_install_preserves_extras_removes_obsolete_owned_file_and_backs_up(self):
         (self.root / "my-notes.txt").write_text("keep me", encoding="utf-8")
         backup = updater.install_update(self.root, "1.1.0", self.new, self.cache)
-        self.assertEqual(updater.read_version((self.root / "SKILL.md").read_text()), "1.2.0")
+        self.assertEqual(updater.read_installed_version(self.root), "1.2.0")
         self.assertEqual((self.root / "my-notes.txt").read_text(), "keep me")
         self.assertFalse((self.root / "modules/removed.md").exists())
         with zipfile.ZipFile(backup) as package:
@@ -214,7 +219,7 @@ class UpdaterTests(unittest.TestCase):
         self.assertEqual(json.loads(output.getvalue())["status"], "check_or_update_failed")
         self.assertEqual((self.root / "SKILL.md").read_bytes(), self.old["SKILL.md"])
 
-    def test_real_release_package_can_update_its_own_loaded_script(self):
+    def test_external_tool_updates_real_skill_package_without_bundled_tools(self):
         repository = MODULE_PATH.parents[1]
         output = self.parent / "build-output"
         environment = {**os.environ, "BUILD_OUTPUT_DIR": str(output), "GITHUB_REF_TYPE": "branch"}
@@ -223,9 +228,12 @@ class UpdaterTests(unittest.TestCase):
             cwd=repository, env=environment, capture_output=True, text=True,
         )
         self.assertEqual(build.returncode, 0, build.stdout + build.stderr)
-        version = updater.read_version((repository / "SKILL.md").read_text(encoding="utf-8"))
+        version = (repository / "VERSION").read_text(encoding="utf-8").strip()
         package_path = output / updater.ARCHIVE_NAME
         payload = updater.unpack_verified(package_path.read_bytes(), version)
+        self.assertTrue((output / "update_skill.py").is_file())
+        self.assertTrue(all(name in {"SKILL.md", updater.MANIFEST_NAME} or name.startswith("modules/") for name in payload))
+        self.assertNotIn("metadata:", payload["SKILL.md"].decode())
         installed = self.parent / "real installed skill"
         for name, data in payload.items():
             path = installed / name
@@ -236,9 +244,6 @@ class UpdaterTests(unittest.TestCase):
         major, minor, patch = updater.version_tuple(version, allow_prerelease=True)
         newer = f"{major}.{minor}.{patch + 1}"
         future = {name: data for name, data in payload.items() if name != updater.MANIFEST_NAME}
-        future["SKILL.md"] = future["SKILL.md"].replace(
-            f'version: "{version}"'.encode(), f'version: "{newer}"'.encode(),
-        )
         manifest = {
             "schema_version": 1, "name": updater.SKILL_NAME, "version": newer,
             "files": {name: hashlib.sha256(data).hexdigest() for name, data in future.items()},
@@ -250,7 +255,7 @@ class UpdaterTests(unittest.TestCase):
             "tag_name": "v" + newer, "draft": False, "prerelease": False,
             "assets": [{"name": updater.ARCHIVE_NAME}, {"name": "SHA256SUMS.txt"}],
         }).encode()
-        spec = importlib.util.spec_from_file_location("installed_updater", installed / "scripts/update_skill.py")
+        spec = importlib.util.spec_from_file_location("external_updater", output / "update_skill.py")
         loaded = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(loaded)
         with mock.patch.object(loaded, "cache_directory", return_value=self.cache), mock.patch.object(loaded, "request_bytes", side_effect=[api, checksum, archive]), mock.patch.object(loaded, "managed_by_cc_switch", return_value=False):
@@ -258,9 +263,27 @@ class UpdaterTests(unittest.TestCase):
         self.assertEqual(result["status"], "updated")
         self.assertEqual(result["current_version"], newer)
         self.assertEqual((installed / "personal-notes.txt").read_bytes(), b"preserved")
-        self.assertEqual(loaded.read_version((installed / "SKILL.md").read_text(encoding="utf-8")), newer)
+        self.assertEqual(loaded.read_installed_version(installed), newer)
         with zipfile.ZipFile(result["backup"]) as backup:
-            self.assertEqual(backup.read("scripts/update_skill.py"), payload["scripts/update_skill.py"])
+            self.assertEqual(backup.read("SKILL.md"), payload["SKILL.md"])
+
+    def test_legacy_1_1_install_migrates_and_removes_old_bundled_maintenance(self):
+        legacy = make_payload("1.1.0", legacy=True)
+        for name, data in legacy.items():
+            path = self.root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(data)
+        backup = updater.install_update(self.root, "1.1.0", self.new, self.cache)
+        self.assertFalse((self.root / "scripts/update_skill.py").exists())
+        self.assertFalse((self.root / "references/updates.md").exists())
+        self.assertNotIn("metadata:", (self.root / "SKILL.md").read_text())
+        self.assertEqual(updater.read_installed_version(self.root), "1.2.0")
+        with zipfile.ZipFile(backup) as package:
+            self.assertIn("scripts/update_skill.py", package.namelist())
+
+    def test_new_archive_rejects_bundled_update_tools_or_docs(self):
+        with self.assertRaises(updater.UpdateError):
+            updater.unpack_verified(archive_bytes(make_payload("1.2.0", legacy=True)), "1.2.0")
 
     def test_release_tag_must_match_package_version(self):
         repository = MODULE_PATH.parents[1]

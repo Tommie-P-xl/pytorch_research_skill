@@ -43,6 +43,7 @@ jobs:
           name: skill-package
           path: |
             dist/*.zip
+            dist/update_skill.py
             dist/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 30
@@ -73,14 +74,14 @@ jobs:
           set -euo pipefail
           (cd dist && sha256sum --check SHA256SUMS.txt)
           if gh release view "$RELEASE_TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" dist/*.zip dist/SHA256SUMS.txt \
+            gh release upload "$RELEASE_TAG" dist/*.zip dist/update_skill.py dist/SHA256SUMS.txt \
               --repo "$GH_REPO" --clobber
           else
             options=(--generate-notes)
             if [[ "$RELEASE_TAG" == *-* ]]; then
               options+=(--prerelease)
             fi
-            gh release create "$RELEASE_TAG" dist/*.zip dist/SHA256SUMS.txt \
+            gh release create "$RELEASE_TAG" dist/*.zip dist/update_skill.py dist/SHA256SUMS.txt \
               --repo "$GH_REPO" --verify-tag \
               --title "PyTorch Research Skill $RELEASE_TAG" "${options[@]}"
           fi

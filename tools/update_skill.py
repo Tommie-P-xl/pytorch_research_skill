@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""检查稳定 Release，并更新直接安装的 Skill；只使用 Python 标准库。"""
+"""独立维护工具：检查稳定 Release、更新指定 Skill；不由 Skill 自动调用。"""
 
 from __future__ import annotations
 
@@ -48,7 +48,7 @@ def version_tuple(version: str, allow_prerelease: bool = False) -> tuple[int, in
 
 
 def read_version(skill_text: str) -> str:
-    """只读取本仓库约定的 name 和 metadata.version，不需要安装 YAML 库。"""
+    """兼容 1.1.x 的旧版元数据；新版版本号从包清单读取。"""
     frontmatter = re.match(r"\A---\r?\n(.*?)\r?\n---", skill_text, re.DOTALL)
     if frontmatter is None:
         raise UpdateError("缺少 SKILL.md 元数据。")
@@ -58,9 +58,39 @@ def read_version(skill_text: str) -> str:
     metadata = re.search(r"(?m)^metadata:\n((?:[ \t]+[^\n]*\n?)+)", content)
     match = re.search(r'(?m)^  version: "([0-9A-Za-z.-]+)"\s*$', metadata.group(1)) if metadata else None
     if match is None:
-        raise UpdateError("未找到版本号，请先安装带更新工具的新版 Release ZIP。")
+        raise UpdateError("未找到旧版版本号或包清单，请通过管理器或新版 Release ZIP 安装。")
     version_tuple(match.group(1), allow_prerelease=True)
     return match.group(1)
+
+
+def check_skill_identity(skill_text: str) -> None:
+    frontmatter = re.match(r"\A---\r?\n(.*?)\r?\n---", skill_text, re.DOTALL)
+    if frontmatter is None or not re.search(
+        rf"(?m)^name: {re.escape(SKILL_NAME)}\s*$", frontmatter.group(1)
+    ):
+        raise UpdateError("目标目录不是本 Skill，停止更新。")
+
+
+def read_installed_version(root: Path) -> str:
+    text = (root / "SKILL.md").read_text(encoding="utf-8")
+    check_skill_identity(text)
+    manifest_path = root / MANIFEST_NAME
+    if manifest_path.is_file():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        version = manifest.get("version")
+        version_tuple(version, allow_prerelease=True)
+        validate_manifest(manifest, version)
+        return version
+    repository = root.parent.parent
+    if root.parent.name == "skills" and (repository / ".git").exists():
+        version = (repository / "VERSION").read_text(encoding="utf-8").strip()
+        version_tuple(version, allow_prerelease=True)
+        return version
+    return read_version(text)
+
+
+def is_development_checkout(root: Path) -> bool:
+    return any((path / ".git").exists() for path in (root, *root.parents))
 
 
 def request_bytes(url: str, limit: int, timeout: float) -> bytes:
@@ -94,7 +124,7 @@ def latest_release(timeout: float) -> dict:
     return {"version": tag[1:], "tag": tag}
 
 
-def safe_relative(name: str) -> Path:
+def safe_relative(name: str, allow_legacy: bool = True) -> Path:
     if not isinstance(name, str) or not name:
         raise UpdateError("包内文件名为空或类型错误。")
     parts = PurePosixPath(name).parts
@@ -104,8 +134,11 @@ def safe_relative(name: str) -> Path:
         or any(part.endswith(".") for part in parts)
     ):
         raise UpdateError(f"包内文件路径不合法：{name!r}。")
-    if name not in {"SKILL.md", MANIFEST_NAME, "scripts/update_skill.py"} and not (
-        len(parts) >= 2 and parts[0] in {"modules", "references"} and name.endswith(".md")
+    allowed = {"SKILL.md", MANIFEST_NAME}
+    if allow_legacy:
+        allowed.update({"scripts/update_skill.py", "references/updates.md"})
+    if name not in allowed and not (
+        len(parts) >= 2 and parts[0] == "modules" and name.endswith(".md")
     ):
         raise UpdateError(f"包中包含不支持的文件：{name}。")
     return Path(*parts)
@@ -121,7 +154,7 @@ def validate_manifest(manifest: dict, version: str) -> dict[str, str]:
     ):
         raise UpdateError("包内文件清单或版本不匹配。")
     files = manifest["files"]
-    if not {"SKILL.md", "scripts/update_skill.py", "references/updates.md"}.issubset(files):
+    if "SKILL.md" not in files:
         raise UpdateError("包内文件清单缺少必需文件。")
     if not any(name.startswith("modules/") for name in files):
         raise UpdateError("包内文件清单缺少模块。")
@@ -149,7 +182,7 @@ def unpack_verified(archive: bytes, version: str) -> dict[str, bytes]:
             if not item.filename.startswith(prefix) or item.is_dir():
                 raise UpdateError("ZIP 根目录或文件结构不符合 Skill 包格式。")
             name = item.filename[len(prefix):]
-            safe_relative(name)
+            safe_relative(name, allow_legacy=False)
             if stat.S_IFMT(item.external_attr >> 16) not in {0, stat.S_IFREG}:
                 raise UpdateError("更新包不能包含软链接或特殊文件。")
             if name.casefold() in folded:
@@ -158,9 +191,7 @@ def unpack_verified(archive: bytes, version: str) -> dict[str, bytes]:
             payload[name] = package.read(item)
     if MANIFEST_NAME not in payload or "SKILL.md" not in payload:
         raise UpdateError("更新包缺少元数据或文件清单。")
-    actual_version = read_version(payload["SKILL.md"].decode("utf-8"))
-    if actual_version != version:
-        raise UpdateError("ZIP 版本和 Release 标签不一致。")
+    check_skill_identity(payload["SKILL.md"].decode("utf-8"))
     files = validate_manifest(json.loads(payload[MANIFEST_NAME]), version)
     if set(payload) != {*files, MANIFEST_NAME}:
         raise UpdateError("ZIP 内容和包内清单不一致。")
@@ -287,7 +318,7 @@ def install_update(root: Path, version: str, payload: dict[str, bytes], cache: P
             path = staging / safe_relative(name)
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
-        new_version = read_version((staging / "SKILL.md").read_text(encoding="utf-8"))
+        new_version = read_installed_version(staging)
         check_local_files(staging, new_version, payload)
         # 替换前再检查一次，发现编辑中的文件就停止。
         check_local_files(root, version, payload)
@@ -314,7 +345,7 @@ def install_update(root: Path, version: str, payload: dict[str, bytes], cache: P
 
 def run(root: Path, mode: str, timeout: float = 10, managed: bool = False) -> dict:
     root = root.resolve()
-    current = read_version((root / "SKILL.md").read_text(encoding="utf-8"))
+    current = read_installed_version(root)
     result = {"current_version": current, "skill_dir": str(root)}
     cache = cache_directory(root)
     cache_file = cache / "last-check.json"
@@ -342,7 +373,7 @@ def run(root: Path, mode: str, timeout: float = 10, managed: bool = False) -> di
         result["status"] = "up_to_date" if release["version"] == current else "local_ahead"
     elif mode == "check":
         result["status"] = "update_available"
-    elif (root / ".git").exists():
+    elif is_development_checkout(root):
         result.update(status="development_checkout", message="开发仓库不会自动覆盖，请发布或通过 Git 更新。")
     elif managed or managed_by_cc_switch(root):
         result.update(status="managed_by_cc_switch", message="请在 CC Switch 中检查更新并更新此 Skill，由管理器同步各应用。")
@@ -375,7 +406,7 @@ def main() -> int:
     group.add_argument("--check", action="store_true", help="立即检查，只报告版本，不修改 Skill。")
     group.add_argument("--update", action="store_true", help="立即检查并更新直接安装的副本。")
     group.add_argument("--auto", action="store_true", help="每 24 小时检查一次，有新版则更新。")
-    parser.add_argument("--skill-dir", type=Path, default=Path(__file__).resolve().parents[1])
+    parser.add_argument("--skill-dir", type=Path, required=True, help="已安装的 Skill 目录，必须显式指定。")
     parser.add_argument("--timeout", type=float, default=10)
     parser.add_argument("--managed", action="store_true", help="此副本由 CC Switch 管理，只提示管理器更新。")
     args = parser.parse_args()
