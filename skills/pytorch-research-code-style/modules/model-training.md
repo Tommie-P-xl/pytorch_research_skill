@@ -25,7 +25,7 @@ description: 已选择模型与训练模块，准备编写 PyTorch 核心网络�
 - 混合精度（AMP）、梯度裁剪、优化器和调度器由 YAML 控制。AMP 下梯度会被放大，裁剪前先用 `scaler.unscale_(optimizer)` 恢复尺度。
 - 计算整轮指标时按样本数加权。最后一批可能较小，不能把所有 batch 的平均 loss 再直接平均。评估保留最后不足一批的样本。
 - 分类模型返回未 softmax 的 logits 给 CrossEntropyLoss；其他任务明确 loss 与输出约定。
-- 显示阶段进度；如果选择展示模块，**在开始记录 epoch 指标前**按主入口读取它，不能训练完才发现未留 metrics。
+- 训练、验证和测试遵守主入口的“进度条必须在同一行刷新”：每个阶段复用一个进度条，batch 内只更新进度和简短指标，不逐批打印或新建进度条；多卡仅全局 rank 0 显示。如果选择展示模块，**在开始记录 epoch 指标前**按主入口读取它，不能训练完才发现未留 metrics。
 - 配置 checkpoint/resume 时，在实现保存恢复接口前读取已选的验证模块。完整训练只在用户要求且资源允许时执行，不把 smoke test 当正式实验。
 - `scripts/train.py` 只读/校验配置、设置 seed、构建数据与模型、调用 trainer 并报告产物路径；`test.py` 同理。
 

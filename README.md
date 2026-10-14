@@ -1,6 +1,6 @@
 # PyTorch Research Skill
 
-当前版本：**1.3.0** · [Release 与下载](https://github.com/Tommie-P-xl/pytorch_research_skill/releases/tag/v1.3.0)
+当前版本：**1.3.2** · [Release 与下载](https://github.com/Tommie-P-xl/pytorch_research_skill/releases/tag/v1.3.2)
 
 这是一套给 AI 编程助手使用的 PyTorch 科研说明。它让助手按统一规则编写项目、批量运行实验，或帮你读懂已有代码。
 
@@ -10,11 +10,20 @@
 
 - **项目构建**：统一目录职责、YAML 配置、随机种子、路径、命名和代码排版。
 - **自动设备选择**：默认优先 CUDA，自动适配多 GPU、单 GPU 和 CPU。
+- **单行进度条**：训练、验证和测试进度原地刷新，每轮或阶段完成后才正常换行，避免逐 batch 刷屏。
 - **实验记录与展示**：保存配置快照、日志和结构化指标，按需生成实验图表。
 - **批量实验**：预设多组参数，串联训练、特征提取与测试，自动传递模型和 NPZ 等产物路径。
 - **代码学习与注释**：为已有代码补充中文解释、算法说明与 Tensor Shape 注释，支持三种详细程度。
 
 Python 和 YAML 科研示例放在文档里，助手会根据它们在你的项目中编写代码。Skill 内容位于 `skills/`；仓库另外提供独立的维护工具，不依赖 PyTorch。
+
+## 1.3.2 更新
+
+针对训练进度条不断换行的问题，主入口新增基础要求：一个阶段复用一个进度条，更新时保持同一行，正常结束后保留最终进度并换行。未启用实验展示模块时也要遵守。
+
+配套说明覆盖终端宽度、指标后缀、日志与进度条配合、DDP 仅 rank 0 输出，以及批量子进程转发时保留回车刷新。`leave=True/False` 只决定结束后是否保留进度条，不能解决运行中反复换行；不支持回车覆盖的输出环境改用低频阶段状态和完成摘要。
+
+Agent 交付前需在实际启动方式下观察连续多个 batch 和阶段结束，检查是否原地刷新。规则见 [主入口](skills/pytorch-research-code-style/SKILL.md#进度条必须在同一行刷新基础能力)、[日志配合](skills/pytorch-research-code-style/modules/experiment-reporting.md#进度条与日志配合) 和 [批量执行](skills/pytorch-research-code-style/modules/batch-experiments.md#5-执行失败与续跑)。更新 Skill 后需重新加载；已有项目需要按新规范修改训练和日志代码，更新 Skill 不会自动改写它们。
 
 ## 快速开始
 
@@ -228,6 +237,7 @@ python scripts/run_experiments.py --config configs/experiments.yaml
 - 使用可移植路径，统一按项目根目录解析，避免机器专属路径成为共享默认值。
 - 核心科研模型默认显式实现，保持数据、模型、训练和评估职责清晰。
 - 用训练集更新权重、验证集选模型、测试集做最终评估，不根据测试结果调参。
+- 进度条在同一行刷新，每轮或阶段完成后才正常换行；避免逐批日志、终端折行和子进程转发造成刷屏。
 - 用户指定的算法、实验协议、模块选择和输出格式优先于默认约定。
 
 自动设备选择侧重兼容性与合理默认策略，实际加速效果取决于模型、batch 和硬件。
@@ -270,7 +280,7 @@ PyYAML 仅用于维护时打包；独立更新工具只使用标准库。
 |---|---|
 | 推送到 `main` 或提交 Pull Request | 校验并上传 `skill-package` 构建产物 |
 | Actions 页面手动运行 | 构建当前选择的分支；选择版本标签时也会发布 |
-| 推送 `v1.3.0` 等版本标签 | 构建后自动创建 GitHub Release，上传 Skill ZIP、独立更新工具与校验文件 |
+| 推送 `v1.3.2` 等版本标签 | 构建后自动创建 GitHub Release，上传 Skill ZIP、独立更新工具与校验文件 |
 
 维护者发布新版本：
 
