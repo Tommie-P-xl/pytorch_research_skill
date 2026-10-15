@@ -27,7 +27,7 @@ description: 已选择实验记录与展示模块，需要保存 PyTorch 日志�
 - batch 指标通过进度条后缀更新，详细日志写文件；正常的终端汇总等进度条关闭后再输出。不要每个 batch 调用 `print`、`tqdm.write` 或带控制台 handler 的 `logger.info`，否则仍会不断产生新行。
 - 必须立即展示的警告/错误可用 `tqdm.write`；使用 logging 时，可在活跃进度条作用域用 `tqdm.contrib.logging.logging_redirect_tqdm` 适配控制台 handler，并保持文件日志正常写入。兼容写入会产生必要的消息行，不代表可以逐批打印指标。
 - 下方 `build_logger` 的普通 `StreamHandler` 适用于进度条开始前或关闭后的输出；在循环内使用它前必须按上一条适配，或仅将逐批详细记录写入文件。进度条和兼容日志使用同一输出流，避免 stdout/stderr 混写。
-- 动态进度输出不直接写入持久日志；文件保存正常的阶段、每轮指标和异常信息，避免大量回车控制字符与重复进度快照。非交互式输出用低频状态记录替代动态条，明确说明显示方式。
+- 动态进度输出不直接写入持久日志；文件只保留完成后的进度、每轮指标和异常信息，不保存刷新快照。重定向或非交互式输出只写阶段开始与完成摘要。
 - 检查开启/关闭控制台日志时进度仍可见，连续多个 batch 原地刷新，窄窗口不折行，一轮结束后仅保留最终条和必要摘要；不要只检查 tqdm 参数就认为显示正确。
 
 实现参考：[tqdm 参数说明](https://tqdm.github.io/docs/tqdm/) 与 [日志重定向示例](https://github.com/tqdm/tqdm#redirecting-logging)。

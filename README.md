@@ -1,6 +1,6 @@
 # PyTorch Research Skill
 
-当前版本：**1.3.2** · [Release 与下载](https://github.com/Tommie-P-xl/pytorch_research_skill/releases/tag/v1.3.2)
+当前版本：**1.3.4** · [Release 与下载](https://github.com/Tommie-P-xl/pytorch_research_skill/releases/tag/v1.3.4)
 
 这是一套给 AI 编程助手使用的 PyTorch 科研说明。它让助手按统一规则编写项目、批量运行实验，或帮你读懂已有代码。
 
@@ -17,13 +17,14 @@
 
 Python 和 YAML 科研示例放在文档里，助手会根据它们在你的项目中编写代码。Skill 内容位于 `skills/`；仓库另外提供独立的维护工具，不依赖 PyTorch。
 
-## 1.3.2 更新
+## 1.3.4 更新
 
-针对训练进度条不断换行的问题，主入口新增基础要求：一个阶段复用一个进度条，更新时保持同一行，正常结束后保留最终进度并换行。未启用实验展示模块时也要遵守。
+- 批量脚本优先让子进程继承终端；捕获动态进度时按二进制块转发，禁止文本通用换行转换和逐行 `print`。
+- 进度行按实际终端宽度收缩，至少留一列；窄窗口自动减少字段。
+- 终端保留回车刷新，文件日志只保存完成后的进度；重定向输出改用阶段摘要。
+- 交付前检查直接运行、批量运行、窄窗口和重定向，避免只检查 tqdm 参数。
 
-配套说明覆盖终端宽度、指标后缀、日志与进度条配合、DDP 仅 rank 0 输出，以及批量子进程转发时保留回车刷新。`leave=True/False` 只决定结束后是否保留进度条，不能解决运行中反复换行；不支持回车覆盖的输出环境改用低频阶段状态和完成摘要。
-
-Agent 交付前需在实际启动方式下观察连续多个 batch 和阶段结束，检查是否原地刷新。规则见 [主入口](skills/pytorch-research-code-style/SKILL.md#进度条必须在同一行刷新基础能力)、[日志配合](skills/pytorch-research-code-style/modules/experiment-reporting.md#进度条与日志配合) 和 [批量执行](skills/pytorch-research-code-style/modules/batch-experiments.md#5-执行失败与续跑)。更新 Skill 后需重新加载；已有项目需要按新规范修改训练和日志代码，更新 Skill 不会自动改写它们。
+规则见 [主入口](skills/pytorch-research-code-style/SKILL.md#进度条必须在同一行刷新基础能力)、[日志配合](skills/pytorch-research-code-style/modules/experiment-reporting.md#进度条与日志配合) 和 [批量执行](skills/pytorch-research-code-style/modules/batch-experiments.md#5-执行失败与续跑)。更新后重新加载 Skill；已有项目的代码仍需按规则修改。
 
 ## 快速开始
 
